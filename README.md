@@ -1,16 +1,15 @@
 # Industry 4.0 Predictive Maintenance System
-
-A predictive maintenance system using CNN and Siamese Networks for industrial equipment monitoring.
+A predictive maintenance system utilizing Convolutional Neural Networks (CNN) for fault detection in industrial equipment using time series data from hydraulic sensors.
 
 ## Features
 
-- Real-time sensor data processing
-- CNN model for fault detection
-- Siamese Network for anomaly detection
-- RESTful API for predictions
-- Comprehensive logging system
-- Model training and evaluation
-- Visualization of results
+- **Real-time Sensor Data Processing**: Handles temperature readings from four hydraulic sensors across multiple cycles.
+- **CNN Model for Fault Detection**: Employs a CNN architecture with convolutional, pooling, and dense layers for accurate fault classification.
+- **Data Visualization**: Generates confusion matrices and t-SNE visualizations for performance evaluation and data clustering.
+- **Model Training and Evaluation**: Tracks training progress with loss and accuracy metrics, providing detailed classification reports (precision, recall, F1 scores).
+- **Comprehensive Data Preprocessing**: Normalizes, reshapes, and splits sensor data into training/testing sets, with one-hot encoded labels.
+- **RESTful API for Predictions**: (Planned) Facilitates real-time prediction integration.
+- **Logging System**: (Planned) Monitors model performance and system operations.
 
 ## Project Structure
 
