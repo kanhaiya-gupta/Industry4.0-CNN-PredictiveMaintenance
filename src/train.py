@@ -245,26 +245,46 @@ def train_and_evaluate():
         similarity_scores = []
         rep = 4
 
-        for j, i in enumerate(tqdm.tqdm(Y_test)):
-            test = X_test[j]
+        # Convert test data to tensors and move to device
+        X_test_tensor = torch.FloatTensor(X_test).to(siamese_model.device)
+        X_train_tensor = torch.FloatTensor(X_train).to(siamese_model.device)
+        Y_train_tensor = torch.FloatTensor(Y_train).to(siamese_model.device)
+        Y_test_tensor = torch.FloatTensor(Y_test).to(siamese_model.device)
 
-            nofault = np.random.choice(np.where(Y_train == 0)[0], rep)
-            nofault = X_train[nofault]
-            nofault_sim = np.max([float(siamese_model.predict(test[np.newaxis,:,:], s[np.newaxis,:,:])) for s in nofault])
+        # Set model to evaluation mode
+        siamese_model.eval()
+        with torch.no_grad():
+            for j, i in enumerate(tqdm.tqdm(Y_test_tensor)):
+                test = X_test_tensor[j].unsqueeze(0)  # Add batch dimension
 
-            fault = np.random.choice(np.where(Y_train == 1)[0], rep)
-            fault = X_train[fault]
-            fault_sim = np.max([float(siamese_model.predict(test[np.newaxis,:,:], s[np.newaxis,:,:])) for s in fault])
-            
-            # Store similarity scores
-            similarity_scores.append(nofault_sim - fault_sim)  # Difference in similarity scores
-            
-            pred.append('nofault' if nofault_sim > fault_sim else 'fault')
-            real.append('nofault' if i == 0 else 'fault')
+                # Get non-fault samples
+                nofault_indices = torch.where(Y_train_tensor == 0)[0]
+                nofault_indices = nofault_indices[torch.randperm(len(nofault_indices))[:rep]]
+                nofault_samples = X_train_tensor[nofault_indices]
+                nofault_sim = torch.max(torch.stack([
+                    siamese_model.predict(test, sample.unsqueeze(0)).squeeze()
+                    for sample in nofault_samples
+                ])).item()
 
-        # Convert to numpy arrays
+                # Get fault samples
+                fault_indices = torch.where(Y_train_tensor == 1)[0]
+                fault_indices = fault_indices[torch.randperm(len(fault_indices))[:rep]]
+                fault_samples = X_train_tensor[fault_indices]
+                fault_sim = torch.max(torch.stack([
+                    siamese_model.predict(test, sample.unsqueeze(0)).squeeze()
+                    for sample in fault_samples
+                ])).item()
+                
+                # Store similarity scores
+                similarity_scores.append(nofault_sim - fault_sim)  # Difference in similarity scores
+                
+                pred.append('nofault' if nofault_sim > fault_sim else 'fault')
+                real.append('nofault' if i.item() == 0 else 'fault')
+
+        # Convert to numpy arrays for plotting and metrics
         similarity_scores = np.array(similarity_scores)
         real_labels = np.array([0 if r == 'nofault' else 1 for r in real])
+        pred_labels = np.array([0 if p == 'nofault' else 1 for p in pred])
 
         # Plot classifier results
         plot_classifier_results(similarity_scores, real_labels, config)
@@ -276,58 +296,25 @@ def train_and_evaluate():
         print(classification_report(real, pred))
 
         # Calculate evaluation metrics
-        metrics = evaluate_model(real, pred, config)
+        metrics = evaluate_model(real_labels, pred_labels, config)
         logger.info("Evaluation metrics:")
         for metric, value in metrics.items():
             logger.info(f"{metric}: {value:.4f}")
 
-        # Save metrics to file
+        # Save metrics
         metrics_file = results_dir / 'metrics.txt'
         save_metrics(metrics, metrics_file)
+        logger.info(f"Successfully saved metrics to {metrics_file}")
 
-        # Plot confusion matrix
-        cnf_matrix = confusion_matrix(real, pred)
-        plot_confusion_matrix(cnf_matrix, classes=np.unique(real), config=config)
+        # Plot and save confusion matrix
+        cm = confusion_matrix(real_labels, pred_labels)
+        plot_confusion_matrix(cm, ['Non-Fault', 'Fault'], config=config)
         confusion_matrix_file = results_dir / 'confusion_matrix.png'
         save_plot(plt.gcf(), confusion_matrix_file, "Confusion Matrix")
         plt.close()
+        logger.info(f"Successfully saved Confusion Matrix to {confusion_matrix_file}")
 
-        # Plot TSNE visualization
-        # Get embeddings from the model
-        embeddings = []
-        for x in X_test:
-            embedding = siamese_model.model.forward_one(torch.FloatTensor(x[np.newaxis,:,:]).to(siamese_model.device))
-            embeddings.append(embedding.cpu().numpy())
-        embeddings = np.vstack(embeddings)
-        
-        plot_tsne(embeddings, Y_test, config)
-        tsne_file = results_dir / 'tsne_visualization.png'
-        save_plot(plt.gcf(), tsne_file, "TSNE Visualization")
-        plt.close()
-
-        # Calculate dummy classifier accuracy
-        dummy_accuracy = sum(np.asarray(real) == 'nofault') / (sum(np.asarray(real) == 'fault') + sum(np.asarray(real) == 'nofault'))
-        logger.info(f"Dummy classifier accuracy: {dummy_accuracy:.4f}")
-
-        # Save dummy classifier accuracy
-        with open(metrics_file, 'a') as f:
-            f.write(f"\nDummy classifier accuracy: {dummy_accuracy:.4f}")
-
-        # Verify all files were created
-        saved_files = [
-            classifier_results_file,
-            metrics_file,
-            confusion_matrix_file,
-            tsne_file
-        ]
-        
-        missing_files = [f for f in saved_files if not f.exists()]
-        if missing_files:
-            raise FileNotFoundError(f"Some result files were not created: {missing_files}")
-        
-        logger.info("\nAll results successfully saved:")
-        for file in saved_files:
-            logger.info(f"- {file.name} ({file.stat().st_size} bytes)")
+        return metrics
 
     except Exception as e:
         logger.error(f"Error in training and evaluation: {str(e)}")

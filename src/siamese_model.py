@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
+import torch.nn.functional as F
 
 class SiameseNetwork(nn.Module):
     def __init__(self, input_shape):
@@ -194,4 +195,41 @@ class SiameseNetwork(nn.Module):
             self.load_state_dict(state_dict)
             self.eval()
         except Exception as e:
-            raise RuntimeError(f"Error loading model: {str(e)}") 
+            raise RuntimeError(f"Error loading model: {str(e)}")
+
+    def predict(self, x1, x2=None):
+        """
+        Make predictions using the trained model.
+        
+        Args:
+            x1 (torch.Tensor): First input tensor of shape [batch_size, sequence_length, features]
+            x2 (torch.Tensor, optional): Second input tensor. If None, uses x1 as reference.
+            
+        Returns:
+            torch.Tensor: Similarity scores between 0 and 1
+        """
+        self.eval()  # Set model to evaluation mode
+        with torch.no_grad():
+            # Convert inputs to tensors if they're numpy arrays
+            if isinstance(x1, np.ndarray):
+                x1 = torch.FloatTensor(x1)
+            if x2 is not None and isinstance(x2, np.ndarray):
+                x2 = torch.FloatTensor(x2)
+                
+            # Move tensors to the same device as the model
+            x1 = x1.to(self.device)
+            if x2 is not None:
+                x2 = x2.to(self.device)
+            else:
+                x2 = x1
+                
+            # Ensure correct shape [batch_size, sequence_length, features]
+            if len(x1.shape) == 2:
+                x1 = x1.unsqueeze(0)  # Add batch dimension
+            if len(x2.shape) == 2:
+                x2 = x2.unsqueeze(0)
+                
+            # Get predictions
+            similarity = self.forward(x1, x2)
+            
+        return similarity  # Return tensor instead of converting to numpy 

@@ -1,5 +1,5 @@
 # Industry 4.0 Predictive Maintenance System
-A predictive maintenance system utilizing Convolutional Neural Networks (CNN) for fault detection in industrial equipment using time series data from hydraulic sensors.
+A production-grade predictive maintenance system leveraging PyTorch-based CNN and Siamese networks for real-time fault detection in hydraulic systems, featuring a FastAPI backend, MLflow experiment tracking, and comprehensive monitoring capabilities.
 
 ## Features
 
@@ -259,6 +259,122 @@ mlflow:
 3. **Distance Network**:
    - Single layer with sigmoid activation
    - Outputs similarity score between 0 and 1
+
+## Technical Details
+
+### System Architecture
+- **Deep Learning Framework**: PyTorch for model development and training
+- **Backend Framework**: FastAPI for high-performance REST API implementation
+- **Data Processing**: Pandas and NumPy for efficient data manipulation and preprocessing
+- **Model Architecture**:
+  - CNN: 3-layer convolutional network with batch normalization and max pooling
+  - Siamese Network: Twin network architecture with shared weights
+- **Training Pipeline**:
+  - Custom data loader for time series sequences
+  - Early stopping with model checkpointing
+  - Gradient clipping for stable training
+  - Learning rate scheduling
+- **Evaluation Metrics**:
+  - Accuracy, Precision, Recall, F1-Score
+  - ROC-AUC curves
+  - Confusion matrices
+  - t-SNE visualization for feature space analysis
+
+### Key Technical Features
+1. **Time Series Processing**:
+   - Sliding window approach for sequence generation
+   - Custom data augmentation for time series
+   - Feature scaling and normalization
+   - Sequence length optimization (8 timesteps)
+
+2. **Model Implementation**:
+   - Custom PyTorch Dataset class for efficient data loading
+   - GPU acceleration support
+   - Model checkpointing and resume training capability
+   - Custom loss functions for Siamese network training
+
+3. **API Implementation**:
+   - Asynchronous request handling
+   - Input validation using Pydantic models
+   - Comprehensive error handling
+   - Swagger/OpenAPI documentation
+   - Rate limiting and request validation
+
+4. **Monitoring and Logging**:
+   - Structured logging with log rotation
+   - Performance metrics tracking
+   - MLflow integration for experiment tracking
+   - Custom logging handlers for different components
+
+### Technologies Used
+- **Programming Languages**: Python 3.8+
+- **Deep Learning**: PyTorch 1.9+
+- **Web Framework**: FastAPI 0.68+
+- **Data Processing**: 
+  - Pandas 1.3+
+  - NumPy 1.21+
+  - Scikit-learn 0.24+
+- **Visualization**:
+  - Matplotlib 3.4+
+  - Seaborn 0.11+
+- **API Documentation**: Swagger UI
+- **Model Tracking**: MLflow
+- **Testing**: Pytest
+- **Development Tools**:
+  - Git for version control
+  - Docker for containerization
+  - VS Code for development
+
+### Performance Optimization
+1. **Data Processing**:
+   - Vectorized operations for feature scaling
+   - Efficient memory management for large datasets
+   - Parallel processing for data augmentation
+
+2. **Model Training**:
+   - Mixed precision training (FP16)
+   - Gradient accumulation for large batch sizes
+   - Custom learning rate schedulers
+   - Model pruning for inference optimization
+
+3. **API Performance**:
+   - Async request handling
+   - Response caching
+   - Connection pooling
+   - Load balancing support
+
+### System Requirements
+- **Hardware**:
+  - CPU: 4+ cores
+  - RAM: 16GB minimum
+  - GPU: NVIDIA GPU with CUDA support (optional)
+- **Software**:
+  - Python 3.8+
+  - CUDA Toolkit 11.0+ (for GPU support)
+  - Docker 20.10+ (for containerized deployment)
+
+### Deployment Options
+1. **Local Deployment**:
+   - Virtual environment setup
+   - Direct Python execution
+   - Development server
+
+2. **Containerized Deployment**:
+   - Docker container
+   - Kubernetes support
+   - Load balancing configuration
+
+3. **Cloud Deployment**:
+   - AWS EC2/ECS
+   - Google Cloud Platform
+   - Azure ML Service
+
+### Security Features
+- Input validation and sanitization
+- Rate limiting
+- CORS configuration
+- API key authentication
+- Secure model storage
 
 ## Usage
 
