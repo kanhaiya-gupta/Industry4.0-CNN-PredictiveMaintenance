@@ -10,15 +10,17 @@ import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report
 from pathlib import Path
 from sklearn.metrics import roc_curve, auc
+from src.utils.logger import setup_logging
 
-logger = logging.getLogger(__name__)
+logger = setup_logging('cnn_model')
 
 class CNNModel(nn.Module):
-    def __init__(self, input_shape=None, num_classes=None, config=None):
+    def __init__(self, input_shape=None, num_classes=None, config=None, debug_mode=False):
         super(CNNModel, self).__init__()
         self.input_shape = input_shape
         self.num_classes = num_classes
         self.config = config
+        self.debug_mode = debug_mode
         
         # Initialize with default values if not provided
         if input_shape is not None and num_classes is not None and config is not None:
@@ -57,11 +59,12 @@ class CNNModel(nn.Module):
         
         # Calculate the size of flattened features
         self.feature_size = self._get_flattened_size()
-        logger.info(f"Flattened feature size: {self.feature_size}")
+        if self.debug_mode:
+            logger.info(f"Flattened feature size: {self.feature_size}")
         
         # Fully connected layers
         self.dense_layers = nn.Sequential(
-            nn.Linear(128, 256),  # Fixed input size to match conv output
+            nn.Linear(self.feature_size, 256),  # Match conv output size
             nn.ReLU(),
             nn.Dropout(0.5),
             nn.Linear(256, 128),
@@ -79,20 +82,24 @@ class CNNModel(nn.Module):
     def _get_flattened_size(self):
         # Create a dummy input to calculate the size after convolutions
         x = torch.randn(1, 18, self.sequence_length)
-        logger.info(f"Initial input shape: {x.shape}")
+        if self.debug_mode:
+            logger.info(f"Initial input shape: {x.shape}")
         
         # Log shape after each layer
         for i, layer in enumerate(self.conv_layers):
             x = layer(x)
-            logger.info(f"After layer {i} ({layer.__class__.__name__}): {x.shape}")
+            if self.debug_mode:
+                logger.info(f"After layer {i} ({layer.__class__.__name__}): {x.shape}")
         
         # Calculate the size after the last conv layer
         last_conv_shape = x.shape
-        logger.info(f"Last conv layer shape: {last_conv_shape}")
+        if self.debug_mode:
+            logger.info(f"Last conv layer shape: {last_conv_shape}")
         
-        # The flattened size should be the number of channels in the last conv layer
-        flattened_size = last_conv_shape[1]  # Number of channels
-        logger.info(f"Using flattened size: {flattened_size}")
+        # The flattened size should be the product of all dimensions except batch
+        flattened_size = last_conv_shape[1] * last_conv_shape[2]  # channels * sequence_length
+        if self.debug_mode:
+            logger.info(f"Using flattened size: {flattened_size}")
         return flattened_size
         
     def forward(self, x):
@@ -105,19 +112,23 @@ class CNNModel(nn.Module):
             x = x.permute(0, 2, 1)
             
         # Log input shape
-        logger.info(f"Input shape: {x.shape}")
+        if self.debug_mode:
+            logger.info(f"Input shape: {x.shape}")
         
         # Apply convolutional layers
         x = self.conv_layers(x)
-        logger.info(f"After conv layers shape: {x.shape}")
+        if self.debug_mode:
+            logger.info(f"After conv layers shape: {x.shape}")
         
-        # Global average pooling to reduce to [batch_size, channels]
-        x = torch.mean(x, dim=2)
-        logger.info(f"After global average pooling shape: {x.shape}")
+        # Flatten the output
+        x = x.view(x.size(0), -1)  # Flatten all dimensions except batch
+        if self.debug_mode:
+            logger.info(f"After flattening shape: {x.shape}")
         
         # Apply dense layers
         x = self.dense_layers(x)
-        logger.info(f"After dense layers shape: {x.shape}")
+        if self.debug_mode:
+            logger.info(f"After dense layers shape: {x.shape}")
         
         return x
         
@@ -381,42 +392,63 @@ class CNNModel(nn.Module):
             
         return probabilities 
 
-    def plot_roc_curve(self, test_loader, save_path):
-        """Plot and save ROC curve"""
+    def plot_roc_curve(self, train_loader, val_loader, save_path):
+        """Plot and save ROC curves for both training and validation data"""
         self.eval()
-        all_labels = []
-        all_probs = []
+        train_labels = []
+        train_probs = []
+        val_labels = []
+        val_probs = []
         
+        # Get predictions for training data
         with torch.no_grad():
-            for batch_X, batch_labels in test_loader:
+            for batch_X, batch_labels in train_loader:
                 batch_X = batch_X.to(self.device)
                 outputs = self(batch_X)
                 probs = torch.softmax(outputs, dim=1)
                 
-                all_labels.extend(batch_labels.cpu().numpy())
-                all_probs.extend(probs.cpu().numpy())
+                train_labels.extend(batch_labels.cpu().numpy())
+                train_probs.extend(probs[:, 1].cpu().numpy())  # Use probability of fault class
+        
+        # Get predictions for validation data
+        with torch.no_grad():
+            for batch_X, batch_labels in val_loader:
+                batch_X = batch_X.to(self.device)
+                outputs = self(batch_X)
+                probs = torch.softmax(outputs, dim=1)
+                
+                val_labels.extend(batch_labels.cpu().numpy())
+                val_probs.extend(probs[:, 1].cpu().numpy())  # Use probability of fault class
         
         # Convert to numpy arrays
-        all_labels = np.array(all_labels)
-        all_probs = np.array(all_probs)
+        train_labels = np.array(train_labels)
+        train_probs = np.array(train_probs)
+        val_labels = np.array(val_labels)
+        val_probs = np.array(val_probs)
         
-        # Calculate ROC curve for each class
-        plt.figure(figsize=(10, 6))
-        for i in range(self.num_classes):
-            fpr, tpr, _ = roc_curve(all_labels == i, all_probs[:, i])
-            roc_auc = auc(fpr, tpr)
-            plt.plot(fpr, tpr, label=f'Class {i} (AUC = {roc_auc:.2f})')
+        # Calculate ROC curves
+        plt.figure(figsize=(10, 8))
+        
+        # Plot training ROC curve
+        fpr, tpr, _ = roc_curve(train_labels, train_probs)
+        roc_auc = auc(fpr, tpr)
+        plt.plot(fpr, tpr, label=f'Training (AUC = {roc_auc:.2f})', linestyle='-')
+        
+        # Plot validation ROC curve
+        fpr, tpr, _ = roc_curve(val_labels, val_probs)
+        roc_auc = auc(fpr, tpr)
+        plt.plot(fpr, tpr, label=f'Validation (AUC = {roc_auc:.2f})', linestyle='--')
         
         plt.plot([0, 1], [0, 1], 'k--')
         plt.xlim([0.0, 1.0])
         plt.ylim([0.0, 1.05])
         plt.xlabel('False Positive Rate')
         plt.ylabel('True Positive Rate')
-        plt.title('ROC Curve')
+        plt.title('ROC Curves - Training vs Validation')
         plt.legend(loc="lower right")
         plt.grid(True)
         
         plt.savefig(save_path)
         plt.close()
         
-        logger.info(f"ROC curve saved to {save_path}") 
+        logger.info(f"ROC curves saved to {save_path}") 

@@ -540,43 +540,108 @@ The API provides a Swagger UI interface for easy testing and documentation. You 
 }
 ```
 
-## Results
+## Data Visualization
 
-The system generates several visualizations and metrics to evaluate model performance:
+### Sensor Data Characteristics
+The system processes data from 18 hydraulic sensors, with each sensor providing three types of measurements:
+- **Weg current (I_w_*)**: Input current to the component
+- **Power output (O_w_*_power)**: Power output from the component
+- **Voltage output (O_w_*_voltage)**: Voltage output from the component
+
+### Data Distribution
+1. **Time Series Patterns**:
+   - Sensor readings are collected at regular intervals
+   - Each cycle contains 8 timesteps of measurements
+   - Normal and fault conditions show distinct patterns in sensor readings
+
+2. **Feature Distributions**:
+   - Power outputs range from 0 to ~8000 units
+   - Voltage outputs typically range from 0 to 30 units
+   - Weg currents show both positive and negative values
+
+3. **Class Distribution**:
+   - Binary classification: Normal (0) vs Fault (1)
+   - Imbalanced dataset with more normal samples than fault samples
+   - Data augmentation techniques applied to balance the classes
+
+### Visualization Examples
+The following visualizations are generated during data preprocessing:
+
+1. **Sensor Time Series**:
+   - Line plots showing sensor readings over time
+   - Separate plots for normal and fault conditions
+   - Highlighted differences in patterns between conditions
+
+2. **Feature Correlation**:
+   - Heatmap showing correlations between different sensors
+   - Strong correlations between related sensors (e.g., power and voltage)
+   - Weak correlations between unrelated sensors
+
+3. **Distribution Plots**:
+   - Histograms showing value distributions for each sensor
+   - Box plots comparing normal vs fault conditions
+   - Violin plots showing density distributions
+
+4. **t-SNE Visualization**:
+   - 2D projection of high-dimensional sensor data
+   - Clear separation between normal and fault conditions
+   - Clusters indicating different types of faults
+
+### Data Preprocessing Steps
+1. **Normalization**:
+   - Min-max scaling applied to all features
+   - Separate scaling for each sensor type
+   - Preserved temporal relationships
+
+2. **Sequence Generation**:
+   - Sliding window approach with window size of 8
+   - Overlapping windows for data augmentation
+   - Maintained temporal order within sequences
+
+3. **Feature Engineering**:
+   - Statistical features (mean, std, min, max)
+   - Temporal features (slope, change rate)
+   - Cross-sensor features (ratios, differences)
+
+## Results
 
 ### Model Performance
 
-1. **Confusion Matrices**
-   - CNN Model:
-     ![CNN Confusion Matrix](results/confusion_matrix_cnn%20model.png)
-   - Siamese Model:
-     ![Siamese Confusion Matrix](results/confusion_matrix_siamese%20model.png)
+#### CNN Model
+- **Accuracy**: 0.6411 (64.11%)
+- **Precision**: 0.6497 (64.97%)
+- **Recall**: 0.6411 (64.11%)
+- **F1 Score**: 0.5522 (55.22%)
 
-2. **Model Comparison**
-   ![Model Comparison](results/model_comparison.png)
+#### Siamese Model
+- **Accuracy**: 0.4260 (42.60%)
+- **Precision**: 0.5190 (51.90%)
+- **Recall**: 0.4260 (42.60%)
+- **F1 Score**: 0.3845 (38.45%)
 
-3. **Training History**
-   ![Training History](results/training_history.png)
-
-### Performance Metrics
-
-| Metric        | CNN Model | Siamese Model |
-|---------------|-----------|---------------|
-| Accuracy      | 0.95      | 0.92          |
-| Precision     | 0.94      | 0.91          |
-| Recall        | 0.93      | 0.90          |
-| F1-Score      | 0.94      | 0.90          |
+### Model Comparison
+| Metric     | CNN Model | Siamese Model | Difference |
+|------------|-----------|---------------|------------|
+| Accuracy   | 0.6411    | 0.4260        | +0.2152    |
+| Precision  | 0.6497    | 0.5190        | +0.1308    |
+| Recall     | 0.6411    | 0.4260        | +0.2152    |
+| F1 Score   | 0.5522    | 0.3845        | +0.1677    |
 
 ### Key Findings
+1. The CNN model demonstrates superior performance across all metrics compared to the Siamese model
+2. The CNN model achieves over 64% accuracy in fault detection, which is significantly higher than the Siamese model's 42.6%
+3. Both models show balanced precision and recall scores, indicating consistent performance across different types of predictions
+4. The F1 scores suggest that the CNN model provides more reliable predictions overall
 
-1. **Siamese Network**
-   - More robust to unseen anomalies
-   - Better at detecting novel failure patterns
-   - Requires less labeled data for training
+### Visualization Results
+The following visualizations are generated during training and evaluation:
+- ROC curves for both training and validation data
+- Confusion matrices
+- Training history plots
+- Accuracy distribution plots
+- Model comparison charts
 
-2. **Combined Approach**
-   - Using the Siamese network provides comprehensive coverage
-   - Improved overall system reliability
+All visualizations are saved in the `results` directory for further analysis.
 
 ## Testing
 

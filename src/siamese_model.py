@@ -4,17 +4,22 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
 import torch.nn.functional as F
-import matplotlib.pyplot as plt
-from sklearn.metrics import roc_curve, auc
 import logging
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix, classification_report
+from pathlib import Path
+from sklearn.metrics import roc_curve, auc
+from src.utils.logger import setup_logging
 
-# Initialize logger
-logger = logging.getLogger(__name__)
+logger = setup_logging('siamese_model')
 
 class SiameseNetwork(nn.Module):
-    def __init__(self, input_shape):
+    def __init__(self, input_shape, debug_mode=False):
         super(SiameseNetwork, self).__init__()
         self.input_shape = input_shape
+        self.debug_mode = debug_mode
+        self.num_classes = 2  # Binary classification: fault vs no-fault
         
         # Get input dimensions
         self.sequence_length = input_shape[0]  # sequence length (8)
@@ -90,9 +95,25 @@ class SiameseNetwork(nn.Module):
             x = x.view(-1, x.size(2), x.size(3))
             x = x.permute(0, 2, 1)
             
+        # Only log shapes in debug mode
+        if hasattr(self, 'debug_mode') and self.debug_mode:
+            logger.debug(f"Input shape: {x.shape}")
+            
         x = self.encoder(x)
+        
+        if hasattr(self, 'debug_mode') and self.debug_mode:
+            logger.debug(f"After conv layers shape: {x.shape}")
+            
         x = x.view(x.size(0), -1)  # Flatten
+        
+        if hasattr(self, 'debug_mode') and self.debug_mode:
+            logger.debug(f"After flattening shape: {x.shape}")
+            
         x = self.embedding(x)
+        
+        if hasattr(self, 'debug_mode') and self.debug_mode:
+            logger.debug(f"After dense layers shape: {x.shape}")
+            
         return x
         
     def forward(self, x1, x2=None):
@@ -295,57 +316,63 @@ class SiameseNetwork(nn.Module):
             
         return similarity  # Return tensor instead of converting to numpy 
 
-    def plot_roc_curve(self, test_loader, save_path):
-        """Plot and save ROC curve for Siamese model"""
-        from sklearn.metrics import roc_curve, auc
-        import matplotlib.pyplot as plt
-        
+    def plot_roc_curve(self, train_loader, val_loader, save_path):
+        """Plot and save ROC curves for both training and validation data"""
         self.eval()
-        all_labels = []
-        all_scores = []
+        train_labels = []
+        train_probs = []
+        val_labels = []
+        val_probs = []
         
+        # Get predictions for training data
         with torch.no_grad():
-            for batch_X, batch_labels in test_loader:
-                batch_X = batch_X.to(self.device)
-                batch_labels = batch_labels.to(self.device)
+            for batch_X1, batch_X2, batch_labels in train_loader:
+                batch_X1 = batch_X1.to(self.device)
+                batch_X2 = batch_X2.to(self.device)
+                outputs = self(batch_X1, batch_X2)
                 
-                # Get similarity scores for each class
-                for i in range(self.num_classes):
-                    # Create reference samples for this class
-                    ref_samples = batch_X[batch_labels == i]
-                    if len(ref_samples) > 0:
-                        # Calculate similarity scores
-                        scores = []
-                        for sample in batch_X:
-                            sample = sample.unsqueeze(0)
-                            ref_sample = ref_samples[0].unsqueeze(0)
-                            score = self.predict(sample, ref_sample).item()
-                            scores.append(score)
-                        
-                        all_scores.extend(scores)
-                        all_labels.extend([1 if j == i else 0 for j in batch_labels.cpu().numpy()])
+                train_labels.extend(batch_labels.cpu().numpy())
+                train_probs.extend(outputs.cpu().numpy())  # Already sigmoid output
+        
+        # Get predictions for validation data
+        with torch.no_grad():
+            for batch_X1, batch_X2, batch_labels in val_loader:
+                batch_X1 = batch_X1.to(self.device)
+                batch_X2 = batch_X2.to(self.device)
+                outputs = self(batch_X1, batch_X2)
+                
+                val_labels.extend(batch_labels.cpu().numpy())
+                val_probs.extend(outputs.cpu().numpy())  # Already sigmoid output
         
         # Convert to numpy arrays
-        all_labels = np.array(all_labels)
-        all_scores = np.array(all_scores)
+        train_labels = np.array(train_labels)
+        train_probs = np.array(train_probs)
+        val_labels = np.array(val_labels)
+        val_probs = np.array(val_probs)
         
-        # Calculate ROC curve
-        fpr, tpr, _ = roc_curve(all_labels, all_scores)
+        # Calculate ROC curves
+        plt.figure(figsize=(10, 8))
+        
+        # Plot training ROC curve
+        fpr, tpr, _ = roc_curve(train_labels, train_probs)
         roc_auc = auc(fpr, tpr)
+        plt.plot(fpr, tpr, label=f'Training (AUC = {roc_auc:.2f})', linestyle='-')
         
-        # Plot ROC curve
-        plt.figure(figsize=(10, 6))
-        plt.plot(fpr, tpr, label=f'ROC curve (AUC = {roc_auc:.2f})')
+        # Plot validation ROC curve
+        fpr, tpr, _ = roc_curve(val_labels, val_probs)
+        roc_auc = auc(fpr, tpr)
+        plt.plot(fpr, tpr, label=f'Validation (AUC = {roc_auc:.2f})', linestyle='--')
+        
         plt.plot([0, 1], [0, 1], 'k--')
         plt.xlim([0.0, 1.0])
         plt.ylim([0.0, 1.05])
         plt.xlabel('False Positive Rate')
         plt.ylabel('True Positive Rate')
-        plt.title('Siamese Model ROC Curve')
+        plt.title('ROC Curves - Training vs Validation')
         plt.legend(loc="lower right")
         plt.grid(True)
         
         plt.savefig(save_path)
         plt.close()
         
-        logger.info(f"ROC curve saved to {save_path}") 
+        logger.info(f"ROC curves saved to {save_path}") 

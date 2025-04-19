@@ -99,6 +99,7 @@ async def lifespan(app: FastAPI):
 
 def load_models():
     """Load trained models or initialize new ones if not found."""
+    global cnn_model, siamese_model
     try:
         models_dir = Path(config['paths']['models_dir'])
         models_dir.mkdir(parents=True, exist_ok=True)
@@ -121,13 +122,15 @@ def load_models():
                     cnn_model = CNNModel(
                         input_shape=(8, 18),  # sequence_length=8, num_features=18
                         num_classes=config['model']['cnn']['num_classes'],
-                        config=config
+                        config=config,
+                        debug_mode=False
                     )
                 else:
                     cnn_model = CNNModel(
                         input_shape=checkpoint['input_shape'],
                         num_classes=checkpoint['num_classes'],
-                        config=checkpoint['config']
+                        config=checkpoint['config'],
+                        debug_mode=False
                     )
                     cnn_model.load_state_dict(checkpoint['model_state_dict'])
             except Exception as e:
@@ -136,14 +139,16 @@ def load_models():
                 cnn_model = CNNModel(
                     input_shape=(8, 18),  # sequence_length=8, num_features=18
                     num_classes=config['model']['cnn']['num_classes'],
-                    config=config
+                    config=config,
+                    debug_mode=False
                 )
         else:
             logger.info("CNN model file not found, creating new model")
             cnn_model = CNNModel(
                 input_shape=(8, 18),  # sequence_length=8, num_features=18
                 num_classes=config['model']['cnn']['num_classes'],
-                config=config
+                config=config,
+                debug_mode=False
             )
         
         # Siamese Model
@@ -154,17 +159,20 @@ def load_models():
             try:
                 logger.info("Found Siamese model file, loading...")
                 checkpoint = torch.load(siamese_model_path, map_location=torch.device('cpu'))
-                siamese_model = SiameseNetwork(input_shape=(8, 18))
+                siamese_model = SiameseNetwork(input_shape=(8, 18), debug_mode=False)
                 siamese_model.load_state_dict(checkpoint['model_state_dict'])
             except Exception as e:
                 logger.error(f"Error loading Siamese model: {str(e)}")
                 logger.info("Creating new Siamese model due to loading error")
-                siamese_model = SiameseNetwork(input_shape=(8, 18))
+                siamese_model = SiameseNetwork(input_shape=(8, 18), debug_mode=False)
         else:
             logger.info("Siamese model file not found, creating new model")
-            siamese_model = SiameseNetwork(input_shape=(8, 18))
+            siamese_model = SiameseNetwork(input_shape=(8, 18), debug_mode=False)
         
-        return cnn_model, siamese_model
+        logger.info("\nModel validation:")
+        logger.info(f"CNN Model type: {type(cnn_model)}")
+        logger.info(f"Siamese Model type: {type(siamese_model)}")
+        logger.info("Both models loaded and validated successfully")
         
     except Exception as e:
         error_msg = f"Error loading models: {str(e)}"
@@ -208,10 +216,16 @@ async def train_models():
     """Train both CNN and Siamese models"""
     try:
         logger.info("Starting model training...")
-        train_and_evaluate()
+        result = train_and_evaluate()
+        if result['status'] == 'error':
+            raise Exception(result['error'])
+            
         logger.info("Training completed, loading models...")
         load_models()  # Reload models after training
-        return {"message": "Training completed successfully"}
+        return {
+            "message": "Training completed successfully",
+            "metrics": result['metrics']
+        }
     except Exception as e:
         error_msg = f"Training failed: {str(e)}"
         logger.error(error_msg)

@@ -174,8 +174,19 @@ def save_metrics(metrics, filepath):
     try:
         with open(filepath, 'w') as f:
             f.write("Evaluation Metrics:\n")
-            for metric, value in metrics.items():
-                f.write(f"{metric}: {value:.4f}\n")
+            if isinstance(metrics, dict):
+                for model_name, model_metrics in metrics.items():
+                    f.write(f"\n{model_name.upper()} Model:\n")
+                    if isinstance(model_metrics, dict):
+                        for metric, value in model_metrics.items():
+                            if isinstance(value, (int, float)):
+                                f.write(f"{metric}: {value:.4f}\n")
+                            else:
+                                f.write(f"{metric}: {value}\n")
+                    else:
+                        f.write(f"Overall: {model_metrics:.4f}\n")
+            else:
+                f.write(f"Overall: {metrics:.4f}\n")
         
         if not filepath.exists():
             raise FileNotFoundError(f"Failed to save metrics to {filepath}")
@@ -215,20 +226,48 @@ def train_and_evaluate():
         logger.info(f"Processed data type: {type(processed_data)}")
         logger.info(f"Processed data length: {len(processed_data)}")
         
-        train_data, test_data = processed_data
+        try:
+            train_data, test_data = processed_data
+            logger.info(f"Successfully unpacked train_data and test_data")
+        except ValueError as e:
+            logger.error(f"Error unpacking processed_data: {str(e)}")
+            logger.error(f"Processed data structure: {type(processed_data)}")
+            if hasattr(processed_data, '__len__'):
+                logger.error(f"Processed data length: {len(processed_data)}")
+            raise
+        
         logger.info(f"Train data type: {type(train_data)}")
         logger.info(f"Test data type: {type(test_data)}")
         
-        X_train, Y_train = train_data
-        X_test, Y_test = test_data
+        try:
+            X_train, Y_train = train_data
+            logger.info(f"Successfully unpacked X_train and Y_train")
+        except ValueError as e:
+            logger.error(f"Error unpacking train_data: {str(e)}")
+            logger.error(f"Train data structure: {type(train_data)}")
+            if hasattr(train_data, '__len__'):
+                logger.error(f"Train data length: {len(train_data)}")
+            raise
+            
+        try:
+            X_test, Y_test = test_data
+            logger.info(f"Successfully unpacked X_test and Y_test")
+        except ValueError as e:
+            logger.error(f"Error unpacking test_data: {str(e)}")
+            logger.error(f"Test data structure: {type(test_data)}")
+            if hasattr(test_data, '__len__'):
+                logger.error(f"Test data length: {len(test_data)}")
+            raise
+            
         logger.info("Data loaded and preprocessed")
 
         # Train CNN Model
         logger.info("Training CNN model...")
         cnn_model = CNNModel(
-            input_shape=(19, 1),
+            input_shape=(8, 18),  # sequence_length=8, num_features=18
             num_classes=config['model']['cnn']['num_classes'],
-            config=config
+            config=config,
+            debug_mode=False
         )
         cnn_model.compile_model(learning_rate=config['model']['cnn']['learning_rate'])
         
@@ -349,12 +388,18 @@ def train_and_evaluate():
         plt.close()
 
         # Plot CNN ROC curve
-        cnn_model.plot_roc_curve(val_loader, results_dir / 'cnn_roc_curve.png')
+        cnn_roc_path = results_dir / 'cnn_roc_curves.png'
+        cnn_model.plot_roc_curve(train_loader, val_loader, cnn_roc_path)
+        logger.info(f"CNN ROC curves saved to {cnn_roc_path}")
 
         # Generate Siamese pairs and train Siamese model
         logger.info("Training Siamese model...")
-        left_input, right_input, targets = data_processor.generate_siamese_pairs(X_train, Y_train)
-        logger.info("Siamese pairs generated")
+        try:
+            left_input, right_input, targets = data_processor.generate_siamese_pairs(X_train, Y_train)
+            logger.info(f"Successfully generated Siamese pairs: left_input shape={left_input.shape}, right_input shape={right_input.shape}, targets shape={targets.shape}")
+        except ValueError as e:
+            logger.error(f"Error generating Siamese pairs: {str(e)}")
+            raise
 
         # Split into train and validation sets
         val_size = int(0.2 * len(left_input))
@@ -385,7 +430,7 @@ def train_and_evaluate():
         )
         
         # Initialize and train Siamese model
-        siamese_model = SiameseNetwork(input_shape=(8, 18))  # sequence_length=8, num_features=18
+        siamese_model = SiameseNetwork(input_shape=(8, 18), debug_mode=False)  # sequence_length=8, num_features=18
         siamese_model.compile_model(learning_rate=config['model']['siamese']['learning_rate'])
         
         siamese_history = siamese_model.train_model(train_loader, val_loader, epochs=config['model']['siamese']['epochs'])
@@ -516,8 +561,10 @@ def train_and_evaluate():
         save_plot(plt.gcf(), siamese_acc_file, "Siamese Accuracy Distribution")
         plt.close()
 
-        # Plot Siamese ROC curve
-        siamese_model.plot_roc_curve(val_loader, results_dir / 'siamese_roc_curve.png')
+        # Plot ROC curves for Siamese model
+        siamese_roc_path = results_dir / 'siamese_roc_curves.png'
+        siamese_model.plot_roc_curve(train_loader, val_loader, siamese_roc_path)
+        logger.info(f"Siamese ROC curves saved to {siamese_roc_path}")
 
         # Save combined metrics
         metrics = {
@@ -563,10 +610,14 @@ def train_and_evaluate():
         plt.close()
         logger.info(f"Successfully saved model comparison to {comparison_file}")
 
-        return {'metrics': metrics, 'status': 'success'}
+        return {'status': 'success', 'metrics': metrics}
 
     except Exception as e:
         logger.error(f"Error in training and evaluation: {str(e)}")
+        logger.error(f"Error type: {type(e)}")
+        logger.error(f"Error traceback: {e.__traceback__}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         return {'status': 'error', 'error': str(e)}
 
 if __name__ == "__main__":

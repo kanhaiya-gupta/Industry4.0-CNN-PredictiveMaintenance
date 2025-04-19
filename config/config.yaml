@@ -13,7 +13,7 @@ paths:
 model:
   cnn:
     input_shape: [19, 1]  # Number of features and sequence length
-    num_classes: 4        # Number of output classes
+    num_classes: 2        # Binary classification: fault vs no-fault
     filters: [32, 64, 128]
     kernel_size: 3
     learning_rate: 0.001
