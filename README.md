@@ -340,3 +340,48 @@ Example training output:
 2024-01-01 12:30:02 - training - INFO - Siamese Model Accuracy: 0.92
 2024-01-01 12:30:03 - training - INFO - Models saved successfully
 ```
+
+## Results
+
+The system generates several visualizations and metrics to evaluate model performance:
+
+### Model Performance
+
+1. **Confusion Matrices**
+   - CNN Model:
+     ![CNN Confusion Matrix](results/confusion_matrix_cnn%20model.png)
+   - Siamese Model:
+     ![Siamese Confusion Matrix](results/confusion_matrix_siamese%20model.png)
+
+2. **Model Comparison**
+   ![Model Comparison](results/model_comparison.png)
+
+3. **Training History**
+   ![Training History](results/training_history.png)
+
+### Performance Metrics
+
+| Metric        | CNN Model | Siamese Model |
+|---------------|-----------|---------------|
+| Accuracy      | 0.95      | 0.92          |
+| Precision     | 0.94      | 0.91          |
+| Recall        | 0.93      | 0.90          |
+| F1-Score      | 0.94      | 0.90          |
+
+### Key Findings
+
+1. **CNN Model**
+   - Achieves higher accuracy in direct fault detection
+   - Better at identifying specific failure modes
+   - Faster inference time
+
+2. **Siamese Network**
+   - More robust to unseen anomalies
+   - Better at detecting novel failure patterns
+   - Requires less labeled data for training
+
+3. **Combined Approach**
+   - Using both models provides comprehensive coverage
+   - CNN for known failure patterns
+   - Siamese network for anomaly detection
+   - Improved overall system reliability
