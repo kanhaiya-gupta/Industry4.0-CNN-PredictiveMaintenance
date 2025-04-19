@@ -1,19 +1,19 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="industry4_predictive_maintenance",
-    version="1.0.0",
+    name="predictive_maintenance",
+    version="0.1.0",
     packages=find_packages(),
     install_requires=[
-        "numpy",
-        "pandas",
-        "tensorflow",
-        "scikit-learn",
-        "matplotlib",
-        "seaborn",
         "fastapi",
         "uvicorn",
-        "python-multipart",
-        "librosa"
-    ]
+        "torch",
+        "numpy",
+        "pandas",
+        "scikit-learn",
+        "pydantic",
+        "python-dotenv",
+        "pytest",
+        "pytest-cov",
+    ],
 ) 

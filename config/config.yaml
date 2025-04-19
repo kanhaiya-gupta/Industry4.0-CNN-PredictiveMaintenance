@@ -11,25 +11,26 @@ paths:
 # Model Configuration
 model:
   cnn:
-    input_shape: [60, 4]  # time steps, features
-    num_classes: 3
-    filters: [100, 100, 160, 160]
-    kernel_size: 6
-    activation: 'relu'
-    dropout_rate: 0.5
-    learning_rate: 0.001
-    batch_size: 16
-    epochs: 30
-
-  siamese:
-    input_shape: [60, 4]  # time steps, features
-    filters: [100, 100, 160, 160]
-    kernel_size: 6
-    activation: 'relu'
+    input_shape: [19, 1]  # Number of features and sequence length
+    num_classes: 4        # Number of output classes
+    filters: [32, 64, 128]
+    kernel_size: 3
     learning_rate: 0.001
     batch_size: 32
     epochs: 50
-    num_pairs: 1000
+    early_stopping:
+      patience: 5
+      min_delta: 0.001
+
+  siamese:
+    input_shape: [19, 1]  # Number of features and sequence length
+    embedding_size: 128
+    learning_rate: 0.001
+    batch_size: 32
+    epochs: 50
+    early_stopping:
+      patience: 5
+      min_delta: 0.001
 
 # Data Processing Configuration
 data:
@@ -97,3 +98,9 @@ api:
   version: '1.0.0'
   debug: true
   reload: true
+  workers: 1
+
+# MLflow Configuration
+mlflow:
+  tracking_uri: "http://localhost:5000"
+  experiment_name: "predictive_maintenance"
