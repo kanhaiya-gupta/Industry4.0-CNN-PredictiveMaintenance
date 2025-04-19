@@ -4,7 +4,7 @@ from sklearn.metrics import confusion_matrix
 from sklearn.manifold import TSNE
 from tensorflow.keras.models import Model
 import seaborn as sns
-from evaluation import ModelEvaluator
+from .evaluation import ModelEvaluator
 
 def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion matrix', cmap=plt.cm.Blues):
     """

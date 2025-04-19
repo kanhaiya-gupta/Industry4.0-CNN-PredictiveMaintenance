@@ -171,9 +171,23 @@ class SiameseNetwork(nn.Module):
         }, filepath)
     
     def load_model(self, filepath):
-        """Load a model from a file"""
-        checkpoint = torch.load(filepath)
-        self.input_shape = checkpoint['input_shape']
-        self.load_state_dict(checkpoint['model_state_dict'])
-        if self.optimizer and checkpoint['optimizer_state_dict']:
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict']) 
+        """Load model from file"""
+        try:
+            checkpoint = torch.load(filepath, weights_only=True)
+            if isinstance(checkpoint, dict):
+                if 'model_state_dict' in checkpoint:
+                    state_dict = checkpoint['model_state_dict']
+                    input_shape = checkpoint.get('input_shape', self.input_shape)
+                else:
+                    state_dict = checkpoint
+                    input_shape = (19, 1)  # Based on the saved model's encoder layer
+            else:
+                state_dict = checkpoint
+                input_shape = (19, 1)
+            
+            # Reinitialize the model with the correct input shape
+            self.__init__(input_shape=input_shape)
+            self.load_state_dict(state_dict)
+            self.eval()
+        except Exception as e:
+            raise RuntimeError(f"Error loading model: {str(e)}") 

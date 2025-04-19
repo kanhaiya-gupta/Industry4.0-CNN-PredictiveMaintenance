@@ -1,5 +1,13 @@
 # Configuration for FastAPI and model settings
 
+# Paths Configuration
+paths:
+  models_dir: 'models'
+  data_dir: 'data/raw'
+  cnn_model_file: 'cnn_model.pth'
+  siamese_model_file: 'siamese_model.pth'
+  sensor_data_file: 'HRSS_normal_standard.csv'
+
 # Model Configuration
 model:
   cnn:
@@ -79,16 +87,6 @@ visualization:
     random_state: 42
     perplexity: 30
     n_iter: 1000
-
-# Path Configuration
-paths:
-  data_dir: 'data/raw'
-  models_dir: 'models'
-  results_dir: 'results'
-  logs_dir: 'logs'
-  sensor_data_file: 'HRSS_normal_standard.csv'
-  cnn_model_file: 'trained_cnn_model.h5'
-  siamese_model_file: 'trained_siamese_model.h5'
 
 # API Configuration
 api:
