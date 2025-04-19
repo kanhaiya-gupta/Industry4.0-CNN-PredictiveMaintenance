@@ -1,0 +1,7 @@
+2025-04-19 09:55:35,577 - predictive_maintenance - INFO - Checking models in directory: models
+2025-04-19 09:55:35,578 - predictive_maintenance - INFO - Looking for CNN model at: models\cnn_model.pth
+2025-04-19 09:55:35,578 - predictive_maintenance - INFO - Looking for Siamese model at: models\siamese_model.pth
+2025-04-19 09:55:35,578 - predictive_maintenance - WARNING - CNN model not found. It will be created during training.
+2025-04-19 09:55:35,579 - predictive_maintenance - WARNING - Siamese model not found. It will be created during training.
+2025-04-19 09:55:35,579 - predictive_maintenance - WARNING - 
+Warning: Not all models are loaded

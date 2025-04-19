@@ -1,0 +1,35 @@
+2025-04-19 09:56:46,786 - predictive_maintenance - INFO - Checking models in directory: models
+2025-04-19 09:56:46,786 - predictive_maintenance - INFO - Looking for CNN model at: models\cnn_model.pth
+2025-04-19 09:56:46,787 - predictive_maintenance - INFO - Looking for Siamese model at: models\siamese_model.pth
+2025-04-19 09:56:46,788 - predictive_maintenance - WARNING - CNN model not found. It will be created during training.
+2025-04-19 09:56:46,788 - predictive_maintenance - WARNING - Siamese model not found. It will be created during training.
+2025-04-19 09:56:46,789 - predictive_maintenance - WARNING - 
+Warning: Not all models are loaded
+2025-04-19 09:57:06,226 - predictive_maintenance - INFO - Starting model training...
+2025-04-19 09:57:06,323 - predictive_maintenance - INFO - Number of classes: 276
+2025-04-19 10:00:40,113 - predictive_maintenance - INFO - 
+Training Siamese Network...
+2025-04-19 10:00:40,119 - predictive_maintenance - INFO - Creating Siamese pairs...
+2025-04-19 10:00:40,308 - predictive_maintenance - INFO - Training Siamese model...
+2025-04-19 10:07:17,258 - predictive_maintenance - INFO - 
+Evaluating CNN Model...
+2025-04-19 10:07:59,871 - predictive_maintenance - INFO - 
+Evaluating Siamese Model...
+2025-04-19 10:08:41,403 - predictive_maintenance - INFO - CNN model saved to models\cnn_model.pth
+2025-04-19 10:08:41,411 - predictive_maintenance - INFO - Siamese model saved to models\siamese_model.pth
+2025-04-19 10:08:41,411 - predictive_maintenance - INFO - CNN model file verified
+2025-04-19 10:08:41,412 - predictive_maintenance - INFO - Siamese model file verified
+2025-04-19 10:08:41,414 - predictive_maintenance - INFO - Training completed, loading models...
+2025-04-19 10:08:41,415 - predictive_maintenance - INFO - Checking models in directory: models
+2025-04-19 10:08:41,415 - predictive_maintenance - INFO - Looking for CNN model at: models\cnn_model.pth
+2025-04-19 10:08:41,415 - predictive_maintenance - INFO - Looking for Siamese model at: models\siamese_model.pth
+2025-04-19 10:08:41,416 - predictive_maintenance - INFO - Found CNN model file, loading...
+2025-04-19 10:08:41,445 - predictive_maintenance - INFO - Creating CNN model with input_shape=(19, 1), num_classes=276
+2025-04-19 10:08:41,449 - predictive_maintenance - INFO - CNN model loaded successfully
+2025-04-19 10:08:41,450 - predictive_maintenance - INFO - Found Siamese model file, loading...
+2025-04-19 10:08:41,484 - predictive_maintenance - INFO - Siamese model loaded successfully
+2025-04-19 10:08:41,484 - predictive_maintenance - INFO - 
+Model validation:
+2025-04-19 10:08:41,485 - predictive_maintenance - INFO - CNN Model type: <class 'src.cnn_model.CNNModel'>
+2025-04-19 10:08:41,485 - predictive_maintenance - INFO - Siamese Model type: <class 'src.siamese_model.SiameseNetwork'>
+2025-04-19 10:08:41,485 - predictive_maintenance - INFO - Both models loaded and validated successfully
