@@ -11,6 +11,7 @@ import torch
 from torch.utils.data import TensorDataset, DataLoader
 from pathlib import Path
 from src.utils.logger import setup_logging
+import seaborn as sns
 
 logger = setup_logging('data_processor')
 
@@ -176,4 +177,78 @@ class DataProcessor:
         plt.ylabel('True label', fontsize=20)
         plt.xlabel('Predicted label', fontsize=20)
         plt.tight_layout()
-        return plt 
+        return plt
+
+    def visualize_data(self, df, features, save_dir=None):
+        """Visualize data distribution and patterns"""
+        # Create figure with subplots
+        fig = plt.figure(figsize=(20, 12))
+        
+        # Plot 1: Time series of Timestamp and Labels
+        ax1 = plt.subplot(2, 1, 1)
+        df.Timestamp.plot(ax=ax1, figsize=(16,6), color='#1f77b4', linewidth=2)
+        ax1.set_xlabel('Time', fontsize=12)
+        ax1.set_ylabel('Timestamp', fontsize=12)
+        ax1.grid(True, alpha=0.3)
+        
+        ax2 = ax1.twinx()
+        ax2.plot(df.Labels, color='#ff7f0e', linewidth=3, alpha=0.7)
+        ax2.set_ylabel('Failure', fontsize=12)
+        plt.title('Time Series of Timestamps and Failure Labels', fontsize=14, pad=20)
+        
+        # Plot 2: Standard deviation of features
+        plt.subplot(2, 1, 2)
+        df.loc[:,features].std().plot.bar(figsize=(16,6), color='#2ca02c')
+        plt.ylabel('Standard Deviation', fontsize=12)
+        plt.title('Feature Standard Deviations', fontsize=14, pad=20)
+        plt.xticks(rotation=45)
+        plt.grid(True, alpha=0.3)
+        
+        # Add correlation heatmap
+        plt.figure(figsize=(16, 12))
+        corr_matrix = df.loc[:,features].corr()
+        sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', center=0, fmt='.2f')
+        plt.title('Feature Correlation Matrix', fontsize=14, pad=20)
+        plt.tight_layout()
+        
+        # Save plots if directory provided
+        if save_dir:
+            save_dir = Path(save_dir)
+            save_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Save time series plot
+            plt.figure(figsize=(20, 12))
+            ax1 = plt.subplot(2, 1, 1)
+            df.Timestamp.plot(ax=ax1, figsize=(16,6), color='#1f77b4', linewidth=2)
+            ax1.set_xlabel('Time', fontsize=12)
+            ax1.set_ylabel('Timestamp', fontsize=12)
+            ax1.grid(True, alpha=0.3)
+            
+            ax2 = ax1.twinx()
+            ax2.plot(df.Labels, color='#ff7f0e', linewidth=3, alpha=0.7)
+            ax2.set_ylabel('Failure', fontsize=12)
+            plt.title('Time Series of Timestamps and Failure Labels', fontsize=14, pad=20)
+            plt.tight_layout()
+            plt.savefig(save_dir / 'time_series.png', dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            # Save standard deviation plot
+            plt.figure(figsize=(16,6))
+            df.loc[:,features].std().plot.bar(color='#2ca02c')
+            plt.ylabel('Standard Deviation', fontsize=12)
+            plt.title('Feature Standard Deviations', fontsize=14, pad=20)
+            plt.xticks(rotation=45)
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plt.savefig(save_dir / 'feature_std.png', dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            # Save correlation heatmap
+            plt.figure(figsize=(16, 12))
+            sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', center=0, fmt='.2f')
+            plt.title('Feature Correlation Matrix', fontsize=14, pad=20)
+            plt.tight_layout()
+            plt.savefig(save_dir / 'correlation_matrix.png', dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            logger.info(f"Data visualization plots saved to {save_dir}") 

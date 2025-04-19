@@ -4,6 +4,12 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, auc
+import logging
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 class SiameseNetwork(nn.Module):
     def __init__(self, input_shape):
@@ -110,12 +116,20 @@ class SiameseNetwork(nn.Module):
         """Set up optimizer and loss function"""
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
         
-    def train_model(self, train_loader, epochs=50):
-        """Train the model using a DataLoader"""
+    def train_model(self, train_loader, val_loader=None, epochs=50):
+        """Train the model using a DataLoader with early stopping"""
         # Training loop
-        history = {'train_loss': [], 'train_acc': []}
+        history = {'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': []}
+        
+        # Early stopping parameters
+        patience = 5
+        min_delta = 0.001
+        best_val_loss = float('inf')
+        patience_counter = 0
+        best_weights = None
         
         for epoch in range(epochs):
+            # Training phase
             self.train()
             train_loss = 0
             train_correct = 0
@@ -128,7 +142,7 @@ class SiameseNetwork(nn.Module):
                 batch_labels = batch_labels.to(self.device)
                 
                 self.optimizer.zero_grad()
-                outputs = self(batch_X1, batch_X2)  # outputs are already between 0 and 1
+                outputs = self(batch_X1, batch_X2)
                 loss = self.criterion(outputs, batch_labels.unsqueeze(1).float())
                 loss.backward()
                 self.optimizer.step()
@@ -138,16 +152,63 @@ class SiameseNetwork(nn.Module):
                 train_total += batch_labels.size(0)
                 train_correct += (predicted.squeeze() == batch_labels).sum().item()
             
-            # Calculate epoch metrics
+            # Calculate training metrics
             train_loss = train_loss / len(train_loader)
             train_acc = train_correct / train_total
+            
+            # Validation phase
+            if val_loader is not None:
+                self.eval()
+                val_loss = 0
+                val_correct = 0
+                val_total = 0
+                
+                with torch.no_grad():
+                    for batch_X1, batch_X2, batch_labels in val_loader:
+                        batch_X1 = batch_X1.to(self.device)
+                        batch_X2 = batch_X2.to(self.device)
+                        batch_labels = batch_labels.to(self.device)
+                        
+                        outputs = self(batch_X1, batch_X2)
+                        loss = self.criterion(outputs, batch_labels.unsqueeze(1).float())
+                        
+                        val_loss += loss.item()
+                        predicted = (outputs.data >= 0.5).float()
+                        val_total += batch_labels.size(0)
+                        val_correct += (predicted.squeeze() == batch_labels).sum().item()
+                
+                # Calculate validation metrics
+                val_loss = val_loss / len(val_loader)
+                val_acc = val_correct / val_total
+                
+                # Early stopping check
+                if val_loss < best_val_loss - min_delta:
+                    best_val_loss = val_loss
+                    patience_counter = 0
+                    best_weights = self.state_dict()
+                else:
+                    patience_counter += 1
+                    if patience_counter >= patience:
+                        logger.info(f'Early stopping triggered at epoch {epoch+1}')
+                        if best_weights is not None:
+                            self.load_state_dict(best_weights)
+                        break
+            else:
+                val_loss = None
+                val_acc = None
             
             # Store metrics
             history['train_loss'].append(train_loss)
             history['train_acc'].append(train_acc)
+            if val_loss is not None:
+                history['val_loss'].append(val_loss)
+                history['val_acc'].append(val_acc)
             
-            print(f'Epoch {epoch+1}/{epochs}')
-            print(f'Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}')
+            # Log progress
+            logger.info(f'Epoch {epoch+1}/{epochs}')
+            logger.info(f'Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}')
+            if val_loss is not None:
+                logger.info(f'Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}')
         
         return history
     
@@ -233,3 +294,58 @@ class SiameseNetwork(nn.Module):
             similarity = self.forward(x1, x2)
             
         return similarity  # Return tensor instead of converting to numpy 
+
+    def plot_roc_curve(self, test_loader, save_path):
+        """Plot and save ROC curve for Siamese model"""
+        from sklearn.metrics import roc_curve, auc
+        import matplotlib.pyplot as plt
+        
+        self.eval()
+        all_labels = []
+        all_scores = []
+        
+        with torch.no_grad():
+            for batch_X, batch_labels in test_loader:
+                batch_X = batch_X.to(self.device)
+                batch_labels = batch_labels.to(self.device)
+                
+                # Get similarity scores for each class
+                for i in range(self.num_classes):
+                    # Create reference samples for this class
+                    ref_samples = batch_X[batch_labels == i]
+                    if len(ref_samples) > 0:
+                        # Calculate similarity scores
+                        scores = []
+                        for sample in batch_X:
+                            sample = sample.unsqueeze(0)
+                            ref_sample = ref_samples[0].unsqueeze(0)
+                            score = self.predict(sample, ref_sample).item()
+                            scores.append(score)
+                        
+                        all_scores.extend(scores)
+                        all_labels.extend([1 if j == i else 0 for j in batch_labels.cpu().numpy()])
+        
+        # Convert to numpy arrays
+        all_labels = np.array(all_labels)
+        all_scores = np.array(all_scores)
+        
+        # Calculate ROC curve
+        fpr, tpr, _ = roc_curve(all_labels, all_scores)
+        roc_auc = auc(fpr, tpr)
+        
+        # Plot ROC curve
+        plt.figure(figsize=(10, 6))
+        plt.plot(fpr, tpr, label=f'ROC curve (AUC = {roc_auc:.2f})')
+        plt.plot([0, 1], [0, 1], 'k--')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Siamese Model ROC Curve')
+        plt.legend(loc="lower right")
+        plt.grid(True)
+        
+        plt.savefig(save_path)
+        plt.close()
+        
+        logger.info(f"ROC curve saved to {save_path}") 

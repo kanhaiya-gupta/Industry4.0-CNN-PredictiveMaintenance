@@ -98,80 +98,74 @@ async def lifespan(app: FastAPI):
     # Clean up resources if needed
 
 def load_models():
-    """Load trained models"""
-    global cnn_model, siamese_model
+    """Load trained models or initialize new ones if not found."""
     try:
-        models_dir = Path('models')
-        models_dir.mkdir(exist_ok=True)
+        models_dir = Path(config['paths']['models_dir'])
+        models_dir.mkdir(parents=True, exist_ok=True)
         
         logger.info(f"Checking models in directory: {models_dir}")
         
-        # Check if model files exist
-        cnn_model_path = models_dir / 'cnn_model.pth'
-        siamese_model_path = models_dir / 'siamese_model.pth'
-        
+        # CNN Model
+        cnn_model_path = models_dir / config['paths']['cnn_model_file']
         logger.info(f"Looking for CNN model at: {cnn_model_path}")
+        
+        if cnn_model_path.exists():
+            try:
+                logger.info("Found CNN model file, loading...")
+                checkpoint = torch.load(cnn_model_path, map_location=torch.device('cpu'))
+                
+                # Check if the saved model's architecture matches current requirements
+                if checkpoint.get('input_shape', [0, 0])[1] != 18:  # Check number of channels
+                    logger.warning("Saved CNN model architecture doesn't match current requirements. Creating new model.")
+                    cnn_model_path.unlink()  # Delete the old model file
+                    cnn_model = CNNModel(
+                        input_shape=(8, 18),  # sequence_length=8, num_features=18
+                        num_classes=config['model']['cnn']['num_classes'],
+                        config=config
+                    )
+                else:
+                    cnn_model = CNNModel(
+                        input_shape=checkpoint['input_shape'],
+                        num_classes=checkpoint['num_classes'],
+                        config=checkpoint['config']
+                    )
+                    cnn_model.load_state_dict(checkpoint['model_state_dict'])
+            except Exception as e:
+                logger.error(f"Error loading CNN model: {str(e)}")
+                logger.info("Creating new CNN model due to loading error")
+                cnn_model = CNNModel(
+                    input_shape=(8, 18),  # sequence_length=8, num_features=18
+                    num_classes=config['model']['cnn']['num_classes'],
+                    config=config
+                )
+        else:
+            logger.info("CNN model file not found, creating new model")
+            cnn_model = CNNModel(
+                input_shape=(8, 18),  # sequence_length=8, num_features=18
+                num_classes=config['model']['cnn']['num_classes'],
+                config=config
+            )
+        
+        # Siamese Model
+        siamese_model_path = models_dir / config['paths']['siamese_model_file']
         logger.info(f"Looking for Siamese model at: {siamese_model_path}")
         
-        if os.path.exists(cnn_model_path):
-            logger.info("Found CNN model file, loading...")
-            # Load the checkpoint
-            checkpoint = torch.load(cnn_model_path, weights_only=True)
-            # Extract the model state dict and config
-            if isinstance(checkpoint, dict):
-                if 'model_state_dict' in checkpoint:
-                    state_dict = checkpoint['model_state_dict']
-                    # Get the correct input shape and num_classes from the saved model
-                    input_shape = checkpoint.get('input_shape', config['model']['cnn']['input_shape'])
-                    num_classes = checkpoint.get('num_classes', config['model']['cnn']['num_classes'])
-                else:
-                    state_dict = checkpoint
-                    # If no config in checkpoint, use the saved model's parameters
-                    input_shape = (19, 1)  # Based on the saved model's conv layer
-                    num_classes = 276  # Based on the saved model's output layer
-            else:
-                state_dict = checkpoint
-                input_shape = (19, 1)
-                num_classes = 276
-                
-            logger.info(f"Creating CNN model with input_shape={input_shape}, num_classes={num_classes}")
-            # Create a new model instance with the correct architecture
-            cnn_model = CNNModel(
-                input_shape=input_shape,
-                num_classes=num_classes
-            )
-            # Load the state dict into the model
-            cnn_model.load_state_dict(state_dict)
-            cnn_model.eval()
-            logger.info("CNN model loaded successfully")
-        else:
-            logger.warning("CNN model not found. It will be created during training.")
-            
-        if os.path.exists(siamese_model_path):
-            logger.info("Found Siamese model file, loading...")
+        if siamese_model_path.exists():
             try:
-                # Create a temporary model to get the input shape
-                temp_model = SiameseNetwork(input_shape=(19, 1))
-                siamese_model = temp_model
-                siamese_model.load_model(siamese_model_path)
-                siamese_model.eval()
-                logger.info("Siamese model loaded successfully")
+                logger.info("Found Siamese model file, loading...")
+                checkpoint = torch.load(siamese_model_path, map_location=torch.device('cpu'))
+                siamese_model = SiameseNetwork(input_shape=(8, 18))
+                siamese_model.load_state_dict(checkpoint['model_state_dict'])
             except Exception as e:
-                logger.error(f"Could not load Siamese model: {str(e)}")
-                logger.warning("A new Siamese model will be created during training.")
-                siamese_model = None
+                logger.error(f"Error loading Siamese model: {str(e)}")
+                logger.info("Creating new Siamese model due to loading error")
+                siamese_model = SiameseNetwork(input_shape=(8, 18))
         else:
-            logger.warning("Siamese model not found. It will be created during training.")
-            
-        # Validate loaded models
-        if cnn_model is not None and siamese_model is not None:
-            logger.info("\nModel validation:")
-            logger.info(f"CNN Model type: {type(cnn_model)}")
-            logger.info(f"Siamese Model type: {type(siamese_model)}")
-            logger.info("Both models loaded and validated successfully")
-        else:
-            logger.warning("\nWarning: Not all models are loaded")
-            
+            logger.info("Siamese model file not found, creating new model")
+            siamese_model = SiameseNetwork(input_shape=(8, 18))
+        
+        return cnn_model, siamese_model
+        
     except Exception as e:
         error_msg = f"Error loading models: {str(e)}"
         logger.error(error_msg)
