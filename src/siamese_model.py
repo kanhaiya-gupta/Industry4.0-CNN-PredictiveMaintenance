@@ -10,8 +10,8 @@ class SiameseNetwork(nn.Module):
         self.input_shape = input_shape
         
         # Get input dimensions
-        self.in_channels = input_shape[0]  # number of features
-        self.sequence_length = input_shape[1]  # sequence length
+        self.sequence_length = input_shape[0]  # sequence length (8)
+        self.in_channels = input_shape[1]  # number of features (18)
         
         # Calculate padding to maintain sequence length
         kernel_size = 3
@@ -20,17 +20,20 @@ class SiameseNetwork(nn.Module):
         # Convolutional encoder
         self.encoder = nn.Sequential(
             # First convolutional block
-            nn.Conv1d(in_channels=self.in_channels, out_channels=32, kernel_size=kernel_size, padding=padding),
+            nn.Conv1d(in_channels=self.in_channels, out_channels=64, kernel_size=kernel_size, padding=padding),
+            nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.MaxPool1d(kernel_size=2, stride=1, padding=1),
             
             # Second convolutional block
-            nn.Conv1d(in_channels=32, out_channels=64, kernel_size=kernel_size, padding=padding),
+            nn.Conv1d(in_channels=64, out_channels=128, kernel_size=kernel_size, padding=padding),
+            nn.BatchNorm1d(128),
             nn.ReLU(),
             nn.MaxPool1d(kernel_size=2, stride=1, padding=1),
             
             # Third convolutional block
-            nn.Conv1d(in_channels=64, out_channels=128, kernel_size=kernel_size, padding=padding),
+            nn.Conv1d(in_channels=128, out_channels=256, kernel_size=kernel_size, padding=padding),
+            nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.MaxPool1d(kernel_size=2, stride=1, padding=1)
         )
@@ -40,7 +43,10 @@ class SiameseNetwork(nn.Module):
         
         # Dense layers for embedding
         self.embedding = nn.Sequential(
-            nn.Linear(self.feature_size, 256),
+            nn.Linear(self.feature_size, 512),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(512, 256),
             nn.ReLU(),
             nn.Dropout(0.5),
             nn.Linear(256, 128)
@@ -70,11 +76,12 @@ class SiameseNetwork(nn.Module):
             # Input is [batch_size, features] -> [batch_size, features, 1]
             x = x.unsqueeze(-1)
         elif len(x.shape) == 3:
-            # Input is [batch_size, features, 1] -> already in correct format
-            pass
+            # Input is [batch_size, sequence_length, features] -> [batch_size, features, sequence_length]
+            x = x.permute(0, 2, 1)
         elif len(x.shape) == 4:
-            # Input is [batch_size, pairs, features, 1] -> [batch_size * pairs, features, 1]
+            # Input is [batch_size, pairs, sequence_length, features] -> [batch_size * pairs, features, sequence_length]
             x = x.view(-1, x.size(2), x.size(3))
+            x = x.permute(0, 2, 1)
             
         x = self.encoder(x)
         x = x.view(x.size(0), -1)  # Flatten
@@ -113,14 +120,11 @@ class SiameseNetwork(nn.Module):
             train_correct = 0
             train_total = 0
             
-            for batch_data, batch_labels in train_loader:
+            for batch_X1, batch_X2, batch_labels in train_loader:
                 # Move data to device
-                batch_data = batch_data.to(self.device)
+                batch_X1 = batch_X1.to(self.device)
+                batch_X2 = batch_X2.to(self.device)
                 batch_labels = batch_labels.to(self.device)
-                
-                # Split pairs into first and second inputs
-                batch_X1 = batch_data[:, 0]  # Shape: [batch_size, channels, sequence_length]
-                batch_X2 = batch_data[:, 1]  # Shape: [batch_size, channels, sequence_length]
                 
                 self.optimizer.zero_grad()
                 outputs = self(batch_X1, batch_X2)  # outputs are already between 0 and 1

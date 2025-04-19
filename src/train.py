@@ -197,7 +197,18 @@ def train_and_evaluate():
         # Load and preprocess data
         data_path = Path(config['paths']['data_dir']) / config['paths']['sensor_data_file']
         df = data_processor.load_data(data_path)
-        (X_train, Y_train), (X_test, Y_test) = data_processor.preprocess_data(df)
+        logger.info(f"Loaded data shape: {df.shape}")
+        
+        processed_data = data_processor.preprocess_data(df)
+        logger.info(f"Processed data type: {type(processed_data)}")
+        logger.info(f"Processed data length: {len(processed_data)}")
+        
+        train_data, test_data = processed_data
+        logger.info(f"Train data type: {type(train_data)}")
+        logger.info(f"Test data type: {type(test_data)}")
+        
+        X_train, Y_train = train_data
+        X_test, Y_test = test_data
         logger.info("Data loaded and preprocessed")
 
         # Generate Siamese pairs
@@ -205,7 +216,7 @@ def train_and_evaluate():
         logger.info("Siamese pairs generated")
 
         # Initialize and train Siamese model
-        siamese_model = SiameseNetwork(input_shape=(X_train.shape[1], 1))
+        siamese_model = SiameseNetwork(input_shape=(8, 18))  # sequence_length=8, num_features=18
         siamese_model.compile_model(learning_rate=config['model']['siamese']['learning_rate'])
         
         # Create DataLoader for training

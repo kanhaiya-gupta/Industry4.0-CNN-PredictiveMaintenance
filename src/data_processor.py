@@ -81,7 +81,11 @@ class DataProcessor:
             Y_train, Y_test = np.concatenate(Y_train), np.concatenate(Y_test)
 
             logger.info(f"Generated sequences - Train: {X_train.shape}, Test: {X_test.shape}")
-            return (X_train, Y_train), (X_test, Y_test)
+            result = ((X_train, Y_train), (X_test, Y_test))
+            logger.info(f"Returning data structure: {type(result)} with length {len(result)}")
+            logger.info(f"First element type: {type(result[0])} with length {len(result[0])}")
+            logger.info(f"Second element type: {type(result[1])} with length {len(result[1])}")
+            return result
         except Exception as e:
             logger.error(f"Error preprocessing data: {str(e)}")
             raise
@@ -117,34 +121,39 @@ class DataProcessor:
 
     def create_siamese_pairs(self, X, y):
         """Create pairs of samples for Siamese network training."""
-        num_samples = len(X)
-        pairs = []
-        labels = []
+        left_input = []
+        right_input = []
+        targets = []
         
         # Create positive pairs (same class)
-        for i in range(num_samples):
-            for j in range(i + 1, min(i + 2, num_samples)):  # Limit pairs per sample
+        for i in range(len(X)):
+            for j in range(i + 1, min(i + 2, len(X))):  # Limit pairs per sample
                 if y[i] == y[j]:
-                    pairs.append([X[i], X[j]])
-                    labels.append(1.0)  # Similar pair
+                    left_input.append(X[i])
+                    right_input.append(X[j])
+                    targets.append(1.0)  # Similar pair
         
         # Create negative pairs (different classes)
-        for i in range(num_samples):
-            for j in range(i + 1, min(i + 2, num_samples)):
+        for i in range(len(X)):
+            for j in range(i + 1, min(i + 2, len(X))):
                 if y[i] != y[j]:
-                    pairs.append([X[i], X[j]])
-                    labels.append(0.0)  # Dissimilar pair
+                    left_input.append(X[i])
+                    right_input.append(X[j])
+                    targets.append(0.0)  # Dissimilar pair
         
         # Convert to numpy arrays
-        pairs = np.array(pairs)
-        labels = np.array(labels)
+        left_input = np.asarray(left_input).reshape(-1, self.sequence_length, len(self.features))
+        right_input = np.asarray(right_input).reshape(-1, self.sequence_length, len(self.features))
+        targets = np.asarray(targets)
         
         # Shuffle pairs and labels together
-        indices = np.random.permutation(len(pairs))
-        pairs = pairs[indices]
-        labels = labels[indices]
+        indices = np.random.permutation(len(targets))
+        left_input = left_input[indices]
+        right_input = right_input[indices]
+        targets = targets[indices]
         
-        return pairs, labels
+        logger.info(f"Created Siamese pairs - Left: {left_input.shape}, Right: {right_input.shape}")
+        return left_input, right_input, targets
     
     def plot_confusion_matrix(self, cm, classes, title='Confusion matrix', cmap=plt.cm.Blues):
         """Plot confusion matrix"""
