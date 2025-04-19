@@ -1,0 +1,101 @@
+# Configuration for FastAPI and model settings
+
+# Model Configuration
+model:
+  cnn:
+    input_shape: [60, 4]  # time steps, features
+    num_classes: 3
+    filters: [100, 100, 160, 160]
+    kernel_size: 6
+    activation: 'relu'
+    dropout_rate: 0.5
+    learning_rate: 0.001
+    batch_size: 16
+    epochs: 30
+
+  siamese:
+    input_shape: [60, 4]  # time steps, features
+    filters: [100, 100, 160, 160]
+    kernel_size: 6
+    activation: 'relu'
+    learning_rate: 0.001
+    batch_size: 32
+    epochs: 50
+    num_pairs: 1000
+
+# Data Processing Configuration
+data:
+  sensor:
+    test_size: 0.2
+    random_state: 42
+    scaler: 'StandardScaler'
+    reshape: true
+
+  audio:
+    sample_rate: 22050
+    n_mfcc: 13
+    test_size: 0.2
+    random_state: 42
+    scaler: 'StandardScaler'
+    reshape: true
+
+# Training Configuration
+training:
+  early_stopping:
+    monitor: 'val_loss'
+    patience: 5
+    restore_best_weights: true
+  validation_split: 0.2
+  verbose: 1
+
+# Evaluation Configuration
+evaluation:
+  metrics:
+    - accuracy
+    - precision
+    - recall
+    - f1_score
+  confusion_matrix:
+    normalize: true
+    title: 'Confusion Matrix'
+    cmap: 'Blues'
+  thresholds: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+  decision_threshold: 0.5
+
+# Visualization Configuration
+visualization:
+  figure_size: [10, 8]
+  font_size:
+    title: 25
+    label: 20
+    tick: 15
+  colors:
+    - '#1f77b4'  # blue
+    - '#ff7f0e'  # orange
+    - '#2ca02c'  # green
+    - '#d62728'  # red
+  tsne:
+    n_components: 2
+    random_state: 42
+    perplexity: 30
+    n_iter: 1000
+
+# Path Configuration
+paths:
+  data_dir: 'data/raw'
+  models_dir: 'models'
+  results_dir: 'results'
+  logs_dir: 'logs'
+  sensor_data_file: 'HRSS_normal_standard.csv'
+  cnn_model_file: 'trained_cnn_model.h5'
+  siamese_model_file: 'trained_siamese_model.h5'
+
+# API Configuration
+api:
+  host: '0.0.0.0'
+  port: 8000
+  title: 'Industry 4.0 Predictive Maintenance API'
+  description: 'API for predicting maintenance needs using CNN and Siamese networks'
+  version: '1.0.0'
+  debug: true
+  reload: true
