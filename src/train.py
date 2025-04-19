@@ -11,110 +11,316 @@ import numpy as np
 from src.config_loader import ConfigLoader
 from pathlib import Path
 from src.utils.logger import setup_logging
+import tqdm
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
+import matplotlib.pyplot as plt
+import itertools
+from sklearn.manifold import TSNE
+import seaborn as sns
 
 # Initialize logger
 logger = setup_logging('training')
 
-def train_and_evaluate():
-    # Load configuration
-    config = ConfigLoader()
+def ensure_results_dir(config=None):
+    """Ensure results directory exists."""
+    if config is None:
+        config = ConfigLoader().get_full_config()
     
-    # Get paths from config
-    paths = config.get_path_config()
-    data_path = Path(paths['data_dir']) / paths['sensor_data_file']
+    results_dir = Path(config['paths']['results_dir'])
+    results_dir.mkdir(parents=True, exist_ok=True)
+    return results_dir
+
+def plot_confusion_matrix(cm, classes, title='Confusion matrix', cmap=plt.cm.Blues, config=None):
+    """Plot confusion matrix using configuration settings."""
+    if config is None:
+        config = ConfigLoader().get_full_config()
     
-    # Initialize data processor
-    data_processor = DataProcessor(data_path)
+    # Get visualization settings from config
+    fig_size = config['visualization']['figure_size']
+    title_font = config['visualization']['font_size']['title']
+    label_font = config['visualization']['font_size']['label']
+    tick_font = config['visualization']['font_size']['tick']
     
-    # Load and preprocess data
-    X, y = data_processor.load_data()
-    X_train, X_test, y_train, y_test = data_processor.preprocess_data((X, y))
+    plt.figure(figsize=fig_size)
+    cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+
+    plt.imshow(cm, interpolation='nearest', cmap=cmap)
+    plt.title(title, fontsize=title_font)
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes, rotation=90, fontsize=tick_font)
+    plt.yticks(tick_marks, classes, fontsize=tick_font)
+
+    fmt = '.2f'
+    thresh = cm.max() / 2.
+    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        plt.text(j, i, format(cm[i, j], fmt),
+                 horizontalalignment="center",
+                 color="white" if cm[i, j] > thresh else "black", 
+                 fontsize=tick_font)
+
+    plt.ylabel('True label', fontsize=label_font)
+    plt.xlabel('Predicted label', fontsize=label_font)
+    plt.tight_layout()
+
+def plot_tsne(embeddings, labels, config=None):
+    """Plot TSNE visualization of embeddings."""
+    if config is None:
+        config = ConfigLoader().get_full_config()
     
-    # Get model configurations
-    cnn_config = config.get_model_config('cnn')
-    siamese_config = config.get_model_config('siamese')
+    tsne_config = config['visualization']['tsne']
+    colors = config['visualization']['colors']
     
-    # Get the number of classes from the data
-    num_classes = len(np.unique(y_train))
-    logger.info(f"Number of classes: {num_classes}")
-    
-    # Train CNN model
-    input_channels = X_train.shape[1]  # number of features
-    sequence_length = X_train.shape[2]  # sequence length (1 in this case)
-    cnn_model = CNNModel(input_shape=(input_channels, sequence_length), num_classes=num_classes)
-    cnn_model.compile_model()
-    history_cnn = cnn_model.train_model(X_train, y_train, X_test, y_test, epochs=cnn_config['epochs'])
-    
-    # Train Siamese network
-    logger.info("\nTraining Siamese Network...")
-    siamese_model = SiameseNetwork(input_shape=(X_train.shape[1], 1))  # (num_features, sequence_length)
-    siamese_model.compile_model(learning_rate=siamese_config['learning_rate'])
-    
-    # Create training pairs and labels
-    logger.info("Creating Siamese pairs...")
-    pairs, labels = data_processor.create_siamese_pairs(X_train, y_train)
-    
-    # Convert pairs to the correct format for the model
-    pairs_tensor = torch.FloatTensor(pairs).reshape(-1, 2, X_train.shape[1], 1)  # Shape: [num_pairs, 2, num_features, 1]
-    labels_tensor = torch.FloatTensor(labels)
-    
-    # Create DataLoader
-    train_dataset = torch.utils.data.TensorDataset(pairs_tensor, labels_tensor)
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, 
-        batch_size=siamese_config['batch_size'], 
-        shuffle=True
+    # Perform TSNE
+    tsne = TSNE(
+        n_components=tsne_config['n_components'],
+        random_state=tsne_config['random_state'],
+        perplexity=tsne_config['perplexity'],
+        n_iter=tsne_config['n_iter']
     )
+    embeddings_2d = tsne.fit_transform(embeddings)
     
-    # Train the model
-    logger.info("Training Siamese model...")
-    history_siamese = siamese_model.train_model(train_loader, epochs=siamese_config['epochs'])
+    # Plot
+    plt.figure(figsize=config['visualization']['figure_size'])
+    for i, label in enumerate(np.unique(labels)):
+        mask = labels == label
+        plt.scatter(
+            embeddings_2d[mask, 0], 
+            embeddings_2d[mask, 1], 
+            c=colors[i], 
+            label=f'Class {label}',
+            alpha=0.6
+        )
     
-    # Initialize evaluators and visualizers
-    cnn_evaluator = ModelEvaluator(cnn_model, data_processor)
-    siamese_evaluator = ModelEvaluator(siamese_model, data_processor)
-    cnn_visualizer = ModelVisualizer(cnn_model)
-    siamese_visualizer = ModelVisualizer(siamese_model)
+    plt.title('TSNE Visualization of Embeddings', fontsize=config['visualization']['font_size']['title'])
+    plt.legend(fontsize=config['visualization']['font_size']['label'])
+    plt.tight_layout()
+
+def plot_classifier_results(similarity_scores, labels, config=None):
+    """Plot classifier results showing similarity score distributions for fault and non-fault cases."""
+    if config is None:
+        config = ConfigLoader().get_full_config()
     
-    # Evaluate CNN model
-    logger.info("\nEvaluating CNN Model...")
-    cnn_metrics = cnn_evaluator.evaluate_model(X_test, y_test, model_type='cnn')
-    cnn_visualizer.plot_evaluation_metrics(cnn_metrics, "CNN Model")
-    cnn_visualizer.plot_training_history(history_cnn)
+    # Get visualization settings from config
+    fig_size = config['visualization']['figure_size']
+    title_font = config['visualization']['font_size']['title']
+    label_font = config['visualization']['font_size']['label']
+    tick_font = config['visualization']['font_size']['tick']
+    colors = config['visualization']['colors']
     
-    # Evaluate Siamese model
-    logger.info("\nEvaluating Siamese Model...")
-    siamese_metrics = siamese_evaluator.evaluate_model(X_test, y_test, model_type='siamese')
-    siamese_visualizer.plot_evaluation_metrics(siamese_metrics, "Siamese Model")
-    siamese_visualizer.plot_training_history(history_siamese)
+    # Create figure
+    plt.figure(figsize=fig_size)
     
-    # Compare models
-    cnn_visualizer.compare_models([cnn_model, siamese_model], X_test, y_test, ["CNN", "Siamese"])
+    # Plot distributions
+    sns.kdeplot(data=similarity_scores[labels == 0], label='Non-Fault', color=colors[0], fill=True)
+    sns.kdeplot(data=similarity_scores[labels == 1], label='Fault', color=colors[1], fill=True)
     
-    # Save models
-    models_dir = Path(paths['models_dir'])
-    models_dir.mkdir(exist_ok=True)
+    # Add decision threshold
+    threshold = config['evaluation']['decision_threshold']
+    plt.axvline(x=threshold, color='red', linestyle='--', label=f'Decision Threshold ({threshold})')
     
-    # Save CNN model
-    cnn_model_path = models_dir / paths['cnn_model_file']
-    cnn_model.save_model(cnn_model_path)
-    logger.info(f"CNN model saved to {cnn_model_path}")
+    # Customize plot
+    plt.title('Similarity Score Distributions', fontsize=title_font)
+    plt.xlabel('Similarity Score', fontsize=label_font)
+    plt.ylabel('Density', fontsize=label_font)
+    plt.legend(fontsize=tick_font)
+    plt.grid(True, alpha=0.3)
     
-    # Save Siamese model
-    siamese_model_path = models_dir / paths['siamese_model_file']
-    siamese_model.save_model(siamese_model_path)
-    logger.info(f"Siamese model saved to {siamese_model_path}")
+    # Add accuracy information
+    predictions = (similarity_scores > threshold).astype(int)
+    accuracy = accuracy_score(labels, predictions)
+    plt.text(0.05, 0.95, f'Accuracy: {accuracy:.4f}', 
+             transform=plt.gca().transAxes, 
+             fontsize=tick_font,
+             bbox=dict(facecolor='white', alpha=0.8))
     
-    # Verify models were saved
-    if cnn_model_path.exists():
-        logger.info("CNN model file verified")
-    else:
-        logger.error("CNN model file not found after saving")
+    plt.tight_layout()
+
+def evaluate_model(y_true, y_pred, config=None):
+    """Evaluate model using configured metrics."""
+    if config is None:
+        config = ConfigLoader().get_full_config()
+    
+    metrics = {}
+    for metric in config['evaluation']['metrics']:
+        if metric == 'accuracy':
+            metrics[metric] = accuracy_score(y_true, y_pred)
+        elif metric == 'precision':
+            metrics[metric] = precision_score(y_true, y_pred, average='weighted')
+        elif metric == 'recall':
+            metrics[metric] = recall_score(y_true, y_pred, average='weighted')
+        elif metric == 'f1_score':
+            metrics[metric] = f1_score(y_true, y_pred, average='weighted')
+    
+    return metrics
+
+def save_plot(fig, filepath, title):
+    """Save a plot and verify it was created."""
+    try:
+        fig.savefig(filepath)
+        if not filepath.exists():
+            raise FileNotFoundError(f"Failed to save {title} to {filepath}")
+        logger.info(f"Successfully saved {title} to {filepath}")
+    except Exception as e:
+        logger.error(f"Error saving {title} to {filepath}: {str(e)}")
+        raise
+
+def save_metrics(metrics, filepath):
+    """Save metrics to file and verify it was created."""
+    try:
+        with open(filepath, 'w') as f:
+            f.write("Evaluation Metrics:\n")
+            for metric, value in metrics.items():
+                f.write(f"{metric}: {value:.4f}\n")
         
-    if siamese_model_path.exists():
-        logger.info("Siamese model file verified")
-    else:
-        logger.error("Siamese model file not found after saving")
+        if not filepath.exists():
+            raise FileNotFoundError(f"Failed to save metrics to {filepath}")
+        logger.info(f"Successfully saved metrics to {filepath}")
+    except Exception as e:
+        logger.error(f"Error saving metrics to {filepath}: {str(e)}")
+        raise
+
+def train_and_evaluate():
+    """Main training and evaluation function."""
+    try:
+        # Load configuration
+        config = ConfigLoader().get_full_config()
+        logger.info("Configuration loaded successfully")
+
+        # Ensure results directory exists
+        results_dir = ensure_results_dir(config)
+        logger.info(f"Results will be saved in {results_dir}")
+
+        # Initialize data processor
+        data_processor = DataProcessor(config)
+        logger.info("Data processor initialized")
+
+        # Load and preprocess data
+        data_path = Path(config['paths']['data_dir']) / config['paths']['sensor_data_file']
+        df = data_processor.load_data(data_path)
+        (X_train, Y_train), (X_test, Y_test) = data_processor.preprocess_data(df)
+        logger.info("Data loaded and preprocessed")
+
+        # Generate Siamese pairs
+        left_input, right_input, targets = data_processor.generate_siamese_pairs(X_train, Y_train)
+        logger.info("Siamese pairs generated")
+
+        # Initialize and train Siamese model
+        siamese_model = SiameseNetwork(input_shape=(X_train.shape[1], 1))
+        siamese_model.compile_model(learning_rate=config['model']['siamese']['learning_rate'])
+        
+        # Create DataLoader for training
+        train_dataset = TensorDataset(
+            torch.FloatTensor(left_input),
+            torch.FloatTensor(right_input),
+            torch.FloatTensor(targets)
+        )
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=config['model']['siamese']['batch_size'],
+            shuffle=True
+        )
+        
+        history = siamese_model.train_model(train_loader, epochs=config['model']['siamese']['epochs'])
+        logger.info("Model training completed")
+
+        # Save the model
+        model_path = Path(config['paths']['models_dir']) / config['paths']['siamese_model_file']
+        siamese_model.save_model(model_path)
+        logger.info(f"Model saved to {model_path}")
+
+        # Evaluate the model
+        real = []
+        pred = []
+        similarity_scores = []
+        rep = 4
+
+        for j, i in enumerate(tqdm.tqdm(Y_test)):
+            test = X_test[j]
+
+            nofault = np.random.choice(np.where(Y_train == 0)[0], rep)
+            nofault = X_train[nofault]
+            nofault_sim = np.max([float(siamese_model.predict(test[np.newaxis,:,:], s[np.newaxis,:,:])) for s in nofault])
+
+            fault = np.random.choice(np.where(Y_train == 1)[0], rep)
+            fault = X_train[fault]
+            fault_sim = np.max([float(siamese_model.predict(test[np.newaxis,:,:], s[np.newaxis,:,:])) for s in fault])
+            
+            # Store similarity scores
+            similarity_scores.append(nofault_sim - fault_sim)  # Difference in similarity scores
+            
+            pred.append('nofault' if nofault_sim > fault_sim else 'fault')
+            real.append('nofault' if i == 0 else 'fault')
+
+        # Convert to numpy arrays
+        similarity_scores = np.array(similarity_scores)
+        real_labels = np.array([0 if r == 'nofault' else 1 for r in real])
+
+        # Plot classifier results
+        plot_classifier_results(similarity_scores, real_labels, config)
+        classifier_results_file = results_dir / 'classifier_results.png'
+        save_plot(plt.gcf(), classifier_results_file, "Classifier Results")
+        plt.close()
+
+        # Print classification report
+        print(classification_report(real, pred))
+
+        # Calculate evaluation metrics
+        metrics = evaluate_model(real, pred, config)
+        logger.info("Evaluation metrics:")
+        for metric, value in metrics.items():
+            logger.info(f"{metric}: {value:.4f}")
+
+        # Save metrics to file
+        metrics_file = results_dir / 'metrics.txt'
+        save_metrics(metrics, metrics_file)
+
+        # Plot confusion matrix
+        cnf_matrix = confusion_matrix(real, pred)
+        plot_confusion_matrix(cnf_matrix, classes=np.unique(real), config=config)
+        confusion_matrix_file = results_dir / 'confusion_matrix.png'
+        save_plot(plt.gcf(), confusion_matrix_file, "Confusion Matrix")
+        plt.close()
+
+        # Plot TSNE visualization
+        # Get embeddings from the model
+        embeddings = []
+        for x in X_test:
+            embedding = siamese_model.model.forward_one(torch.FloatTensor(x[np.newaxis,:,:]).to(siamese_model.device))
+            embeddings.append(embedding.cpu().numpy())
+        embeddings = np.vstack(embeddings)
+        
+        plot_tsne(embeddings, Y_test, config)
+        tsne_file = results_dir / 'tsne_visualization.png'
+        save_plot(plt.gcf(), tsne_file, "TSNE Visualization")
+        plt.close()
+
+        # Calculate dummy classifier accuracy
+        dummy_accuracy = sum(np.asarray(real) == 'nofault') / (sum(np.asarray(real) == 'fault') + sum(np.asarray(real) == 'nofault'))
+        logger.info(f"Dummy classifier accuracy: {dummy_accuracy:.4f}")
+
+        # Save dummy classifier accuracy
+        with open(metrics_file, 'a') as f:
+            f.write(f"\nDummy classifier accuracy: {dummy_accuracy:.4f}")
+
+        # Verify all files were created
+        saved_files = [
+            classifier_results_file,
+            metrics_file,
+            confusion_matrix_file,
+            tsne_file
+        ]
+        
+        missing_files = [f for f in saved_files if not f.exists()]
+        if missing_files:
+            raise FileNotFoundError(f"Some result files were not created: {missing_files}")
+        
+        logger.info("\nAll results successfully saved:")
+        for file in saved_files:
+            logger.info(f"- {file.name} ({file.stat().st_size} bytes)")
+
+    except Exception as e:
+        logger.error(f"Error in training and evaluation: {str(e)}")
+        raise
 
 if __name__ == "__main__":
     train_and_evaluate()

@@ -4,9 +4,10 @@
 paths:
   models_dir: 'models'
   data_dir: 'data/raw'
+  results_dir: 'results'
   cnn_model_file: 'cnn_model.pth'
   siamese_model_file: 'siamese_model.pth'
-  sensor_data_file: 'HRSS_normal_standard.csv'
+  sensor_data_file: 'HRSS_anomalous_optimized.csv'
 
 # Model Configuration
 model:
