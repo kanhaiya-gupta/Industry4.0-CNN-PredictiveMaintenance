@@ -1,0 +1,13 @@
+Evaluation Metrics:
+
+ACCURACY Model:
+Overall: 0.6411
+
+PRECISION Model:
+Overall: 0.6497
+
+RECALL Model:
+Overall: 0.6411
+
+F1_SCORE Model:
+Overall: 0.5522
