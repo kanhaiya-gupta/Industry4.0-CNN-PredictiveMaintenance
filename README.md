@@ -12,6 +12,8 @@ A production-grade predictive maintenance system leveraging PyTorch-based CNN an
 - **Comprehensive Data Preprocessing**: Normalizes, reshapes, and splits sensor data into training/testing sets, with sequence generation for time series analysis.
 - **RESTful API for Predictions**: Provides real-time prediction integration through FastAPI.
 - **Logging System**: Monitors model performance and system operations with detailed logging.
+- **t-SNE Visualization**: Shows how the CNN and Siamese models transform input data into a lower-dimensional space.
+- **Feature Importance Analysis**: Provides detailed feature importance rankings for both models using SHAP values.
 
 ## Project Structure
 
@@ -45,7 +47,15 @@ A production-grade predictive maintenance system leveraging PyTorch-based CNN an
 │   ├── confusion_matrix_cnn model.png
 │   ├── confusion_matrix_siamese model.png
 │   ├── model_comparison.png
-│   └── training_history.png
+│   ├── training_history.png
+│   ├── cnn_tsne.png
+│   ├── siamese_tsne.png
+│   ├── cnn_feature_importance.png
+│   ├── siamese_feature_importance.png
+│   ├── cnn_feature_rankings.txt
+│   ├── siamese_feature_rankings.txt
+│   ├── cnn_roc.png
+│   └── siamese_roc.png
 ├── scripts/               # Utility scripts
 ├── src/
 │   ├── api/              # FastAPI application
@@ -653,3 +663,36 @@ The project includes a comprehensive test suite to ensure code quality and funct
 ```bash
 pip install pytest pytest-cov
 ```
+
+## t-SNE Visualization
+The project generates t-SNE plots for both CNN and Siamese models to visualize the learned embeddings:
+- **CNN t-SNE**: Shows how the CNN model's convolutional layers transform the input data into a lower-dimensional space
+- **Siamese t-SNE**: Visualizes how the Siamese network's embedding space separates similar and dissimilar sequences
+
+## Feature Importance Analysis
+The system provides detailed feature importance analysis using SHAP values:
+- **CNN Feature Importance**: Ranks features based on their impact on the CNN model's predictions
+- **Siamese Feature Importance**: Analyzes which features are most important for sequence similarity
+- **Feature Rankings**: Detailed text files containing importance scores for each feature at each time step
+
+## Results Directory Structure
+The `results` directory contains:
+```
+results/
+├── cnn_tsne.png              # t-SNE visualization of CNN model embeddings
+├── siamese_tsne.png          # t-SNE visualization of Siamese model embeddings
+├── cnn_feature_importance.png # SHAP-based feature importance for CNN
+├── siamese_feature_importance.png # SHAP-based feature importance for Siamese
+├── cnn_feature_rankings.txt  # Detailed feature rankings for CNN model
+├── siamese_feature_rankings.txt # Detailed feature rankings for Siamese model
+├── cnn_roc.png              # ROC curve for CNN model
+├── siamese_roc.png          # ROC curve for Siamese model
+├── cnn_confusion_matrix.png # Confusion matrix for CNN model
+└── siamese_confusion_matrix.png # Confusion matrix for Siamese model
+```
+
+## Contributing
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+This project is licensed under the MIT License - see the LICENSE file for details.

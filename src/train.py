@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from .data_processor import DataProcessor
 from .siamese_model import SiameseNetwork
 from .evaluation import ModelEvaluator
-from .visualization import ModelVisualizer
+from .visualization import ModelVisualizer, plot_tsne_embeddings
 from .cnn_model import CNNModel
 import numpy as np
 from src.config_loader import ConfigLoader
@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import itertools
 from sklearn.manifold import TSNE
 import seaborn as sns
+from src.feature_analysis import analyze_cnn_features, analyze_siamese_features, compare_feature_importance
 
 # Initialize logger
 logger = setup_logging('training')
@@ -70,30 +71,39 @@ def plot_tsne(embeddings, labels, config=None):
     tsne_config = config['visualization']['tsne']
     colors = config['visualization']['colors']
     
-    # Perform TSNE
-    tsne = TSNE(
-        n_components=tsne_config['n_components'],
-        random_state=tsne_config['random_state'],
-        perplexity=tsne_config['perplexity'],
-        n_iter=tsne_config['n_iter']
-    )
-    embeddings_2d = tsne.fit_transform(embeddings)
-    
-    # Plot
-    plt.figure(figsize=config['visualization']['figure_size'])
-    for i, label in enumerate(np.unique(labels)):
-        mask = labels == label
-        plt.scatter(
-            embeddings_2d[mask, 0], 
-            embeddings_2d[mask, 1], 
-            c=colors[i], 
-            label=f'Class {label}',
-            alpha=0.6
+    try:
+        # Ensure embeddings are 2D
+        if len(embeddings.shape) > 2:
+            embeddings = embeddings.reshape(embeddings.shape[0], -1)
+        
+        # Perform TSNE
+        tsne = TSNE(
+            n_components=tsne_config['n_components'],
+            random_state=tsne_config['random_state'],
+            perplexity=tsne_config['perplexity'],
+            n_iter=tsne_config['n_iter']
         )
-    
-    plt.title('TSNE Visualization of Embeddings', fontsize=config['visualization']['font_size']['title'])
-    plt.legend(fontsize=config['visualization']['font_size']['label'])
-    plt.tight_layout()
+        embeddings_2d = tsne.fit_transform(embeddings)
+        
+        # Plot
+        plt.figure(figsize=config['visualization']['figure_size'])
+        for i, label in enumerate(np.unique(labels)):
+            mask = labels == label
+            plt.scatter(
+                embeddings_2d[mask, 0], 
+                embeddings_2d[mask, 1], 
+                c=colors[i], 
+                label=f'Class {label}',
+                alpha=0.6
+            )
+        
+        plt.title('TSNE Visualization of Embeddings', fontsize=config['visualization']['font_size']['title'])
+        plt.legend(fontsize=config['visualization']['font_size']['label'])
+        plt.tight_layout()
+        
+    except Exception as e:
+        logger.error(f"Error in t-SNE visualization: {str(e)}")
+        raise
 
 def plot_classifier_results(similarity_scores, labels, config=None):
     """Plot classifier results showing similarity score distributions for fault and non-fault cases."""
@@ -273,7 +283,7 @@ def train_and_evaluate():
         
         # Create DataLoader for CNN training
         train_dataset = TensorDataset(
-            torch.FloatTensor(X_train),
+            torch.FloatTensor(X_train),  # Keep original shape [batch_size, sequence_length, num_features]
             torch.LongTensor(Y_train)
         )
         train_loader = DataLoader(
@@ -284,7 +294,7 @@ def train_and_evaluate():
         
         # Create validation DataLoader
         val_dataset = TensorDataset(
-            torch.FloatTensor(X_test),
+            torch.FloatTensor(X_test),  # Keep original shape [batch_size, sequence_length, num_features]
             torch.LongTensor(Y_test)
         )
         val_loader = DataLoader(
@@ -391,6 +401,62 @@ def train_and_evaluate():
         cnn_roc_path = results_dir / 'cnn_roc_curves.png'
         cnn_model.plot_roc_curve(train_loader, val_loader, cnn_roc_path)
         logger.info(f"CNN ROC curves saved to {cnn_roc_path}")
+
+        # Plot CNN t-SNE visualization
+        logger.info("Generating CNN t-SNE visualization...")
+        cnn_model.eval()
+        with torch.no_grad():
+            # Create a new DataLoader for CNN t-SNE
+            cnn_tsne_dataset = TensorDataset(
+                torch.FloatTensor(X_train),
+                torch.LongTensor(Y_train)
+            )
+            cnn_tsne_loader = DataLoader(
+                cnn_tsne_dataset,
+                batch_size=config['model']['cnn']['batch_size'],
+                shuffle=False
+            )
+            
+            # Get embeddings from the last convolutional layer
+            embeddings = []
+            labels = []
+            for batch_X, batch_y in cnn_tsne_loader:
+                logger.debug(f"CNN batch_X shape: {batch_X.shape}")
+                batch_X = batch_X.to(cnn_model.device)
+                batch_y = batch_y.to(cnn_model.device)
+                # Permute input to match expected shape [batch_size, channels, sequence_length]
+                batch_X = batch_X.permute(0, 2, 1)  # [32, 8, 18] -> [32, 18, 8]
+                logger.debug(f"CNN permuted batch_X shape: {batch_X.shape}")
+                # Get embeddings from the last convolutional layer
+                x = cnn_model.conv_layers(batch_X)
+                logger.debug(f"CNN conv output shape: {x.shape}")
+                x = x.view(x.size(0), -1)  # Flatten
+                logger.debug(f"CNN flattened shape: {x.shape}")
+                embeddings.append(x.cpu().numpy())
+                labels.append(batch_y.cpu().numpy())
+            
+            embeddings = np.vstack(embeddings)
+            labels = np.concatenate(labels)
+            logger.debug(f"CNN final embeddings shape: {embeddings.shape}")
+            logger.debug(f"CNN final labels shape: {labels.shape}")
+            
+            # Plot t-SNE
+            plot_tsne_embeddings(embeddings, labels, ['Non-Fault', 'Fault'])
+            cnn_tsne_file = results_dir / 'cnn_tsne.png'
+            save_plot(plt.gcf(), cnn_tsne_file, "CNN t-SNE Visualization")
+            plt.close()
+            logger.info(f"CNN t-SNE visualization saved to {cnn_tsne_file}")
+
+        # Analyze CNN feature importance
+        logger.info("Analyzing CNN feature importance...")
+        feature_names = data_processor.features
+        cnn_feature_importance = analyze_cnn_features(
+            cnn_model,
+            train_loader,
+            feature_names,
+            results_dir,
+            config
+        )
 
         # Generate Siamese pairs and train Siamese model
         logger.info("Training Siamese model...")
@@ -561,10 +627,76 @@ def train_and_evaluate():
         save_plot(plt.gcf(), siamese_acc_file, "Siamese Accuracy Distribution")
         plt.close()
 
-        # Plot ROC curves for Siamese model
+        # Plot Siamese ROC curve
         siamese_roc_path = results_dir / 'siamese_roc_curves.png'
         siamese_model.plot_roc_curve(train_loader, val_loader, siamese_roc_path)
         logger.info(f"Siamese ROC curves saved to {siamese_roc_path}")
+
+        # Plot Siamese t-SNE visualization
+        logger.info("Generating Siamese t-SNE visualization...")
+        siamese_model.eval()
+        with torch.no_grad():
+            # Create a new DataLoader for Siamese t-SNE
+            siamese_tsne_dataset = TensorDataset(
+                torch.FloatTensor(left_input),
+                torch.FloatTensor(right_input),
+                torch.FloatTensor(targets)
+            )
+            siamese_tsne_loader = DataLoader(
+                siamese_tsne_dataset,
+                batch_size=config['model']['siamese']['batch_size'],
+                shuffle=False
+            )
+            
+            # Get embeddings from the embedding network
+            embeddings = []
+            labels = []
+            for batch_X1, batch_X2, batch_y in siamese_tsne_loader:
+                logger.debug(f"Siamese batch_X1 shape: {batch_X1.shape}")
+                logger.debug(f"Siamese batch_X2 shape: {batch_X2.shape}")
+                batch_X1 = batch_X1.to(siamese_model.device)
+                batch_X2 = batch_X2.to(siamese_model.device)
+                batch_y = batch_y.to(siamese_model.device)
+                # Get embeddings from the embedding network
+                emb1 = siamese_model.forward_one(batch_X1)
+                emb2 = siamese_model.forward_one(batch_X2)
+                logger.debug(f"Siamese emb1 shape: {emb1.shape}")
+                logger.debug(f"Siamese emb2 shape: {emb2.shape}")
+                embeddings.append(emb1.cpu().numpy())
+                embeddings.append(emb2.cpu().numpy())
+                labels.append(batch_y.cpu().numpy())
+                labels.append(batch_y.cpu().numpy())
+            
+            embeddings = np.vstack(embeddings)
+            labels = np.concatenate(labels)
+            logger.debug(f"Siamese final embeddings shape: {embeddings.shape}")
+            logger.debug(f"Siamese final labels shape: {labels.shape}")
+            
+            # Plot t-SNE
+            plot_tsne_embeddings(embeddings, labels, ['Non-Fault', 'Fault'])
+            siamese_tsne_file = results_dir / 'siamese_tsne.png'
+            save_plot(plt.gcf(), siamese_tsne_file, "Siamese t-SNE Visualization")
+            plt.close()
+            logger.info(f"Siamese t-SNE visualization saved to {siamese_tsne_file}")
+
+        # Analyze Siamese feature importance
+        logger.info("Analyzing Siamese feature importance...")
+        siamese_feature_importance = analyze_siamese_features(
+            siamese_model,
+            train_loader,
+            feature_names,
+            results_dir,
+            config
+        )
+
+        # Compare feature importance between models
+        logger.info("Comparing feature importance between models...")
+        correlation = compare_feature_importance(
+            cnn_feature_importance,
+            siamese_feature_importance,
+            results_dir
+        )
+        logger.info(f"Feature importance correlation between models: {correlation:.3f}")
 
         # Save combined metrics
         metrics = {

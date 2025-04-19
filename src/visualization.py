@@ -47,6 +47,10 @@ def plot_tsne_embeddings(embeddings, labels, class_names):
     # Create color map
     colors = {i: plt.cm.Set1(i) for i in range(len(class_names))}
     
+    # Ensure embeddings are 2D
+    if len(embeddings.shape) > 2:
+        embeddings = embeddings.reshape(embeddings.shape[0], -1)
+    
     # Apply t-SNE
     tsne = TSNE(n_components=2, random_state=42, n_iter=300, perplexity=5)
     T = tsne.fit_transform(embeddings)
@@ -54,12 +58,15 @@ def plot_tsne_embeddings(embeddings, labels, class_names):
     # Plot
     plt.figure(figsize=(20,12))
     for i in range(len(class_names)):
-        mask = np.argmax(labels, axis=1) == i
-        plt.scatter(T[mask, 0], T[mask, 1], c=[colors[i]], label=class_names[i])
+        mask = labels == i
+        plt.scatter(T[mask, 0], T[mask, 1], c=[colors[i]], label=class_names[i], alpha=0.6)
     
     plt.legend()
     plt.title('t-SNE Visualization of Embeddings')
-    plt.show()
+    plt.xlabel('t-SNE 1')
+    plt.ylabel('t-SNE 2')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
 
 class ModelVisualizer:
     def __init__(self, model):
