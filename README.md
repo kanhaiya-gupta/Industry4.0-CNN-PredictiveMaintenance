@@ -385,3 +385,69 @@ The system generates several visualizations and metrics to evaluate model perfor
    - CNN for known failure patterns
    - Siamese network for anomaly detection
    - Improved overall system reliability
+
+## Testing
+
+The project includes a comprehensive test suite to ensure code quality and functionality. Tests are organized by component:
+
+### Running Tests
+
+1. Install test dependencies:
+```bash
+pip install pytest pytest-cov
+```
+
+2. Run all tests:
+```bash
+pytest tests/
+```
+
+3. Run tests with coverage report:
+```bash
+pytest --cov=src tests/
+```
+
+### Test Structure
+
+```
+tests/
+├── conftest.py           # Shared test fixtures
+├── test_api.py          # API endpoint tests
+├── test_cnn_model.py    # CNN model tests
+├── test_data_processor.py # Data processing tests
+└── test_siamese_model.py # Siamese network tests
+```
+
+### Test Coverage
+
+The test suite covers:
+- Data processing and validation
+- Model initialization and forward passes
+- Model saving and loading
+- API endpoints and responses
+- Error handling and edge cases
+
+### Key Test Cases
+
+1. **Data Processing**
+   - Data loading and validation
+   - Feature preprocessing
+   - Siamese pairs creation
+
+2. **CNN Model**
+   - Model initialization
+   - Forward pass
+   - Prediction
+   - Model saving/loading
+
+3. **Siamese Network**
+   - Model initialization
+   - Forward pass
+   - Embedding generation
+   - Model saving/loading
+
+4. **API Endpoints**
+   - Health check
+   - Prediction
+   - Training
+   - Error handling
